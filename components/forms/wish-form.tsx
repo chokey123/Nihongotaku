@@ -1,0 +1,63 @@
+"use client";
+
+import { useState, useTransition } from "react";
+
+import { backendService } from "@/lib/services/backend-service";
+import type { Dictionary } from "@/lib/i18n";
+
+export function WishForm({ dict }: { dict: Dictionary }) {
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <form
+      className="glass-panel flex flex-col gap-4 rounded-[32px] border border-border p-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        startTransition(async () => {
+          const response = await backendService.submitWish({
+            artist: String(formData.get("artist") ?? ""),
+            title: String(formData.get("title") ?? ""),
+            genre: String(formData.get("genre") ?? ""),
+            url: String(formData.get("url") ?? ""),
+          });
+          setMessage(response.message);
+          form.reset();
+        });
+      }}
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-2 text-sm">
+          <span>{dict.labels.artist}</span>
+          <input name="artist" required className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
+        </label>
+        <label className="space-y-2 text-sm">
+          <span>{dict.labels.title}</span>
+          <input name="title" required className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
+        </label>
+        <label className="space-y-2 text-sm">
+          <span>{dict.labels.genre}</span>
+          <input name="genre" required className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
+        </label>
+        <label className="space-y-2 text-sm">
+          <span>{dict.labels.sourceUrl}</span>
+          <input name="url" type="url" required className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
+        </label>
+      </div>
+      <button
+        type="submit"
+        disabled={isPending}
+        className="w-fit rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white disabled:opacity-70"
+      >
+        {isPending ? "..." : dict.labels.submit}
+      </button>
+      {message ? (
+        <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand-strong">
+          {message}
+        </p>
+      ) : null}
+    </form>
+  );
+}
