@@ -465,6 +465,11 @@ export class BackendService {
     return data as SupabaseMusicRow;
   }
 
+  private async findMusicRowInCollection(id: string, includeUnpublished = false) {
+    const rows = await this.fetchMusicRows(includeUnpublished);
+    return rows?.find((row) => row.id === id) ?? null;
+  }
+
   private async fetchArticleRows(includeUnpublished = false) {
     if (!hasSupabaseConfig) {
       return null;
@@ -513,6 +518,14 @@ export class BackendService {
     }
 
     return data as SupabaseArticleRow;
+  }
+
+  private async findArticleRowInCollection(
+    id: string,
+    includeUnpublished = false,
+  ) {
+    const rows = await this.fetchArticleRows(includeUnpublished);
+    return rows?.find((row) => row.id === id) ?? null;
   }
 
   private async persistMusic(
@@ -778,7 +791,10 @@ export class BackendService {
     id: string,
     options?: { includeUnpublished?: boolean },
   ): Promise<MusicItem | undefined> {
-    const row = await this.fetchMusicRowById(id, options?.includeUnpublished ?? false);
+    const includeUnpublished = options?.includeUnpublished ?? false;
+    const row =
+      (await this.fetchMusicRowById(id, includeUnpublished)) ??
+      (await this.findMusicRowInCollection(id, includeUnpublished));
 
     if (!row) {
       await wait();
@@ -891,7 +907,11 @@ export class BackendService {
     id: string,
     options?: { includeUnpublished?: boolean },
   ): Promise<ArticleItem | undefined> {
-    const row = await this.fetchArticleRowById(id, options?.includeUnpublished ?? false);
+    const includeUnpublished = options?.includeUnpublished ?? false;
+    const row =
+      (await this.fetchArticleRowById(id, includeUnpublished)) ??
+      (await this.findArticleRowInCollection(id, includeUnpublished));
+
     if (row) {
       return buildArticleItemFromSupabase(row);
     }
@@ -1033,7 +1053,10 @@ export class BackendService {
     return { ok: true, id, quizVocabKeys };
   }
 
-  async createArticle(payload: ArticleDraftPayload) {
+  async createArticle(
+    payload: ArticleDraftPayload,
+    options?: { isPublished?: boolean },
+  ) {
     if (hasSupabaseConfig) {
       const actorId = await getCurrentActorId();
       const id = crypto.randomUUID();
@@ -1044,7 +1067,7 @@ export class BackendService {
         artist: payload.artist,
         thumbnail_url: payload.thumbnailUrl,
         content_json: payload.content,
-        is_published: true,
+        is_published: options?.isPublished ?? false,
         created_by: actorId,
         updated_by: actorId,
       });
@@ -1053,14 +1076,23 @@ export class BackendService {
         throw new Error(error.message);
       }
 
-      return { ok: true, id, payload };
+      return { ok: true, id, payload, isPublished: options?.isPublished ?? false };
     }
 
     await wait(280);
-    return { ok: true, id: "draft-article", payload };
+    return {
+      ok: true,
+      id: "draft-article",
+      payload,
+      isPublished: options?.isPublished ?? false,
+    };
   }
 
-  async updateArticle(id: string, payload: ArticleDraftPayload) {
+  async updateArticle(
+    id: string,
+    payload: ArticleDraftPayload,
+    options?: { isPublished?: boolean },
+  ) {
     if (hasSupabaseConfig) {
       const actorId = await getCurrentActorId();
       const { error } = await supabase
@@ -1071,7 +1103,7 @@ export class BackendService {
           artist: payload.artist,
           thumbnail_url: payload.thumbnailUrl,
           content_json: payload.content,
-          is_published: true,
+          is_published: options?.isPublished ?? false,
           updated_by: actorId,
         })
         .eq("id", id);
@@ -1080,11 +1112,11 @@ export class BackendService {
         throw new Error(error.message);
       }
 
-      return { ok: true, id, payload };
+      return { ok: true, id, payload, isPublished: options?.isPublished ?? false };
     }
 
     await wait(280);
-    return { ok: true, id, payload };
+    return { ok: true, id, payload, isPublished: options?.isPublished ?? false };
   }
 
   async searchAdminArticles(query = ""): Promise<ArticleItem[]> {

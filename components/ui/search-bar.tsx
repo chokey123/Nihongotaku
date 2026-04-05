@@ -14,6 +14,7 @@ export function SearchBar({
         name="q"
         defaultValue={defaultValue}
         placeholder={placeholder}
+        suppressHydrationWarning
         className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
       />
       <button

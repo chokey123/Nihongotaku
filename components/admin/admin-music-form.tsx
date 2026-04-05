@@ -9,6 +9,7 @@ import {
   lookupJachDictionary,
   normalizeJapaneseReading,
 } from '@/lib/services/jachdict-client'
+import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 import type { Dictionary } from '@/lib/i18n'
 import type {
   LocalizedText,
@@ -135,6 +136,8 @@ const adminMusicUiLabels: Record<
   {
     expandAll: string
     collapseAll: string
+    shiftEarlier?: string
+    shiftLater?: string
     line: string
     vocabCount: string
     translated: string
@@ -232,24 +235,26 @@ function parseLrc(content: string): LyricLine[] {
 }
 
 function parseLrcRows(content: string) {
-  return content.split(/\r?\n/).reduce<
-    Array<{ atMs: number; timeLabel: string; text: string }>
-  >((lines, row) => {
-    const matched = row.match(/\[(\d{2}):(\d{2})(?:\.(\d{2}))?\](.*)/)
-    if (!matched) return lines
+  return content
+    .split(/\r?\n/)
+    .reduce<
+      Array<{ atMs: number; timeLabel: string; text: string }>
+    >((lines, row) => {
+      const matched = row.match(/\[(\d{2}):(\d{2})(?:\.(\d{2}))?\](.*)/)
+      if (!matched) return lines
 
-    const [, mm, ss, cs = '00', lyric] = matched
-    const atMs =
-      Number(mm) * 60_000 + Number(ss) * 1000 + Number(cs.padEnd(3, '0'))
+      const [, mm, ss, cs = '00', lyric] = matched
+      const atMs =
+        Number(mm) * 60_000 + Number(ss) * 1000 + Number(cs.padEnd(3, '0'))
 
-    lines.push({
-      atMs,
-      timeLabel: `${mm}:${ss}`,
-      text: lyric.trim(),
-    })
+      lines.push({
+        atMs,
+        timeLabel: `${mm}:${ss}`,
+        text: lyric.trim(),
+      })
 
-    return lines
-  }, [])
+      return lines
+    }, [])
 }
 
 function extractYoutubeIdFromUrl(value: string) {
@@ -295,6 +300,28 @@ function mergeTranslationFromLrc(
   }))
 }
 
+function formatTimeLabel(atMs: number) {
+  const totalSeconds = Math.floor(atMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, '0')
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0')
+
+  return `${minutes}:${seconds}`
+}
+
+function shiftLyricsTiming(currentLyrics: LyricLine[], deltaMs: number) {
+  return currentLyrics.map((line) => {
+    const nextAtMs = Math.max(0, line.atMs + deltaMs)
+
+    return {
+      ...line,
+      atMs: nextAtMs,
+      timeLabel: formatTimeLabel(nextAtMs),
+    }
+  })
+}
+
 function FormField({
   label,
   children,
@@ -330,19 +357,24 @@ export function AdminMusicForm({
   const [translationLocale, setTranslationLocale] =
     useState<Locale>(initialLocale)
   const [lyrics, setLyrics] = useState<LyricLine[]>(initialMusic?.lyrics ?? [])
-  const [vocabs, setVocabs] = useState<MusicVocabItem[]>(initialMusic?.vocab ?? [])
-  const [isPublished, setIsPublished] = useState(initialMusic?.isPublished ?? false)
+  const [vocabs, setVocabs] = useState<MusicVocabItem[]>(
+    initialMusic?.vocab ?? [],
+  )
+  const [isPublished, setIsPublished] = useState(
+    initialMusic?.isPublished ?? false,
+  )
   const [collapsedLineIds, setCollapsedLineIds] = useState<string[]>([])
   const [tokenizerState, setTokenizerState] = useState<
     'loading' | 'ready' | 'error'
   >('loading')
   const [isAddingVocab, setIsAddingVocab] = useState(false)
-  const [pendingSelection, setPendingSelection] = useState<VocabContextMenuState | null>(
-    null,
-  )
+  const [pendingSelection, setPendingSelection] =
+    useState<VocabContextMenuState | null>(null)
   const [sourceUrl, setSourceUrl] = useState(
     initialMusic?.sourceUrl ??
-      (initialMusic ? `https://youtube.com/watch?v=${initialMusic.youtubeId}` : ''),
+      (initialMusic
+        ? `https://youtube.com/watch?v=${initialMusic.youtubeId}`
+        : ''),
   )
   const [title, setTitle] = useState(initialMusic?.title ?? '')
   const [artist, setArtist] = useState(initialMusic?.artist ?? '')
@@ -351,16 +383,16 @@ export function AdminMusicForm({
   const uiLabels = adminMusicUiLabels[translationLocale]
   const publishLabels = publishActionLabels[initialLocale]
   const youtubeIdPreview = extractYoutubeIdFromUrl(sourceUrl)
-  const youtubeThumbnailUrl = youtubeIdPreview
-    ? `https://img.youtube.com/vi/${youtubeIdPreview}/sddefault.jpg`
-    : ''
+  const youtubeThumbnailUrl = useYoutubeThumbnail(youtubeIdPreview)
   const areAllCollapsed =
     lyrics.length > 0 && collapsedLineIds.length === lyrics.length
   const tokenizerRef = useRef<KuromojiTokenizer | null>(null)
   const dictionaryRef = useRef<Awaited<
     ReturnType<typeof loadJachDictionary>
   > | null>(null)
-  const previousLyricIdsRef = useRef<string>(lyrics.map((line) => line.id).join('|'))
+  const previousLyricIdsRef = useRef<string>(
+    lyrics.map((line) => line.id).join('|'),
+  )
   const addVocabButtonPointerDownRef = useRef(false)
 
   useEffect(() => {
@@ -455,8 +487,9 @@ export function AdminMusicForm({
     }
 
     const exactMatch = tokens.find((token) => token.surface_form === normalized)
-    const relevantTokens =
-      exactMatch ? [exactMatch] : tokens.map((token) => ({ ...token }))
+    const relevantTokens = exactMatch
+      ? [exactMatch]
+      : tokens.map((token) => ({ ...token }))
     const baseWord = extractBaseWord(relevantTokens)
     const reading = relevantTokens
       .map((token) => token.reading ?? '')
@@ -467,15 +500,12 @@ export function AdminMusicForm({
       basicForm:
         baseWord && baseWord !== '*'
           ? baseWord
-          : relevantTokens[0]?.surface_form ?? normalized,
+          : (relevantTokens[0]?.surface_form ?? normalized),
       reading,
     }
   }
 
-  const openSelectionMenu = (
-    lineId: string,
-    selectedText: string,
-  ) => {
+  const openSelectionMenu = (lineId: string, selectedText: string) => {
     const normalized = selectedText.trim()
     if (!normalized) return
 
@@ -489,7 +519,10 @@ export function AdminMusicForm({
     })
   }
 
-  const syncSelectionForLine = (lineId: string, currentTarget: HTMLDivElement) => {
+  const syncSelectionForLine = (
+    lineId: string,
+    currentTarget: HTMLDivElement,
+  ) => {
     const selection = window.getSelection()
     const selectedText = selection?.toString().trim() ?? ''
 
@@ -566,7 +599,10 @@ export function AdminMusicForm({
     }
   }
 
-  const persistMusic = (nextPublished: boolean, action: 'draft' | 'publish' | 'unpublish') => {
+  const persistMusic = (
+    nextPublished: boolean,
+    action: 'draft' | 'publish' | 'unpublish',
+  ) => {
     const payload: MusicDraftPayload = {
       sourceUrl,
       title,
@@ -602,7 +638,16 @@ export function AdminMusicForm({
         )
 
         if (mode === 'create') {
-          router.replace(`/${initialLocale}/admin/music/${response.id}`)
+          router.replace(
+            action === 'publish'
+              ? `/${initialLocale}/music/${response.id}`
+              : `/${initialLocale}/admin/music/${response.id}`,
+          )
+          return
+        }
+
+        if (action === 'publish') {
+          router.replace(`/${initialLocale}/music/${response.id}`)
         }
       } catch (error) {
         setStatus(
@@ -636,13 +681,17 @@ export function AdminMusicForm({
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-heading text-2xl font-bold">{title || dict.labels.title}</h2>
+          <h2 className="font-heading text-2xl font-bold">
+            {title || dict.labels.title}
+          </h2>
           <p className="mt-1 text-sm text-muted">
             {artist || dict.labels.artist}
           </p>
         </div>
         <span className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-muted dark:bg-white">
-          {isPublished ? publishLabels.publishedState : publishLabels.draftState}
+          {isPublished
+            ? publishLabels.publishedState
+            : publishLabels.draftState}
         </span>
       </div>
 
@@ -677,7 +726,9 @@ export function AdminMusicForm({
               const file = event.target.files?.[0]
               if (!file) return
               const content = await file.text()
-              setLyrics((current) => mergeTranslationFromLrc(current, content, 'zh'))
+              setLyrics((current) =>
+                mergeTranslationFromLrc(current, content, 'zh'),
+              )
               event.target.value = ''
             }}
           />
@@ -691,7 +742,9 @@ export function AdminMusicForm({
               const file = event.target.files?.[0]
               if (!file) return
               const content = await file.text()
-              setLyrics((current) => mergeTranslationFromLrc(current, content, 'en'))
+              setLyrics((current) =>
+                mergeTranslationFromLrc(current, content, 'en'),
+              )
               event.target.value = ''
             }}
           />
@@ -744,6 +797,24 @@ export function AdminMusicForm({
             >
               {areAllCollapsed ? uiLabels.expandAll : uiLabels.collapseAll}
             </button>
+            <button
+              type="button"
+              onClick={() =>
+                setLyrics((current) => shiftLyricsTiming(current, -200))
+              }
+              className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand"
+            >
+              {uiLabels.shiftEarlier ?? 'All -0.2s'}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setLyrics((current) => shiftLyricsTiming(current, 200))
+              }
+              className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand"
+            >
+              {uiLabels.shiftLater ?? 'All +0.2s'}
+            </button>
             {translationLocales.map((locale) => (
               <button
                 key={locale}
@@ -780,110 +851,115 @@ export function AdminMusicForm({
                 const translationText =
                   line.translation[translationLocale]?.trim() ?? ''
                 const hasTranslation = translationText.length > 0
-                const lineVocabs = vocabs.filter((entry) => entry.lineId === line.id)
+                const lineVocabs = vocabs.filter(
+                  (entry) => entry.lineId === line.id,
+                )
                 const vocabCount = lineVocabs.length
 
                 return (
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-brand-strong">
-                      {line.timeLabel}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {uiLabels.line} {index + 1}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="rounded-full border border-border bg-surface-strong px-2.5 py-1 font-medium text-muted">
-                      {vocabCount} {uiLabels.vocabCount}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-1 font-medium ${
-                        hasTranslation
-                          ? 'border border-border bg-white text-muted dark:bg-white'
-                          : 'border border-red-300 bg-white text-red-600 dark:bg-white'
-                      }`}
-                    >
-                      {hasTranslation
-                        ? `${translationLocale.toUpperCase()} ${uiLabels.translated}`
-                        : `${translationLocale.toUpperCase()} ${uiLabels.missing}`}
-                    </span>
-                  </div>
-                  {collapsedLineIds.includes(line.id) ? (
-                    <p className="mt-2 truncate font-heading text-base font-bold">
-                      {line.japanese || '...'}
-                    </p>
-                  ) : (
-                    <div
-                      contentEditable
-                      suppressContentEditableWarning
-                      onInput={(event) => {
-                        const nextJapanese = event.currentTarget.textContent ?? ''
-                        setLyrics((current) =>
-                          current.map((entry) =>
-                            entry.id === line.id
-                              ? { ...entry, japanese: nextJapanese }
-                              : entry,
-                          ),
-                        )
-                      }}
-                      onMouseUp={(event) => {
-                        syncSelectionForLine(line.id, event.currentTarget)
-                      }}
-                      onKeyUp={(event) => {
-                        syncSelectionForLine(line.id, event.currentTarget)
-                      }}
-                      onBlur={() => {
-                        if (addVocabButtonPointerDownRef.current) {
-                          return
-                        }
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-brand-strong">
+                          {line.timeLabel}
+                        </span>
+                        <span className="text-xs text-muted">
+                          {uiLabels.line} {index + 1}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full border border-border bg-surface-strong px-2.5 py-1 font-medium text-muted">
+                          {vocabCount} {uiLabels.vocabCount}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 font-medium ${
+                            hasTranslation
+                              ? 'border border-border bg-white text-muted dark:bg-white'
+                              : 'border border-red-300 bg-white text-red-600 dark:bg-white'
+                          }`}
+                        >
+                          {hasTranslation
+                            ? `${translationLocale.toUpperCase()} ${uiLabels.translated}`
+                            : `${translationLocale.toUpperCase()} ${uiLabels.missing}`}
+                        </span>
+                      </div>
+                      {collapsedLineIds.includes(line.id) ? (
+                        <p className="mt-2 truncate font-heading text-base font-bold">
+                          {line.japanese || '...'}
+                        </p>
+                      ) : (
+                        <div
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={(event) => {
+                            const nextJapanese =
+                              event.currentTarget.textContent ?? ''
+                            setLyrics((current) =>
+                              current.map((entry) =>
+                                entry.id === line.id
+                                  ? { ...entry, japanese: nextJapanese }
+                                  : entry,
+                              ),
+                            )
+                          }}
+                          onMouseUp={(event) => {
+                            syncSelectionForLine(line.id, event.currentTarget)
+                          }}
+                          onKeyUp={(event) => {
+                            syncSelectionForLine(line.id, event.currentTarget)
+                          }}
+                          onBlur={() => {
+                            if (addVocabButtonPointerDownRef.current) {
+                              return
+                            }
 
-                        if (pendingSelection?.lineId === line.id) {
-                          setPendingSelection(null)
-                        }
-                      }}
-                      className="mt-3 min-h-16 rounded-2xl border border-border bg-surface-strong px-4 py-3 font-heading text-base font-bold text-foreground/95 outline-none transition focus:border-brand whitespace-pre-wrap"
-                    >
-                      {line.japanese}
+                            if (pendingSelection?.lineId === line.id) {
+                              setPendingSelection(null)
+                            }
+                          }}
+                          className="mt-3 min-h-16 rounded-2xl border border-border bg-surface-strong px-4 py-3 font-heading text-base font-bold text-foreground/95 outline-none transition focus:border-brand whitespace-pre-wrap"
+                        >
+                          {line.japanese}
+                        </div>
+                      )}
+                      {!collapsedLineIds.includes(line.id) &&
+                      pendingSelection?.lineId === line.id ? (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            onMouseDown={() => {
+                              addVocabButtonPointerDownRef.current = true
+                            }}
+                            onClick={addSelectedVocab}
+                            onMouseUp={() => {
+                              addVocabButtonPointerDownRef.current = false
+                            }}
+                            onBlur={() => {
+                              addVocabButtonPointerDownRef.current = false
+                            }}
+                            disabled={isAddingVocab}
+                            className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold transition hover:border-brand disabled:cursor-wait disabled:opacity-70"
+                          >
+                            {isAddingVocab
+                              ? uiLabels.addingVocab
+                              : uiLabels.addVocab}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
-                  )}
-                  {!collapsedLineIds.includes(line.id) &&
-                  pendingSelection?.lineId === line.id ? (
-                    <div className="mt-3 flex justify-end">
+                    {!collapsedLineIds.includes(line.id) ? (
                       <button
                         type="button"
-                        onMouseDown={() => {
-                          addVocabButtonPointerDownRef.current = true
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          toggleLineCollapse(line.id)
                         }}
-                        onClick={addSelectedVocab}
-                        onMouseUp={() => {
-                          addVocabButtonPointerDownRef.current = false
-                        }}
-                        onBlur={() => {
-                          addVocabButtonPointerDownRef.current = false
-                        }}
-                        disabled={isAddingVocab}
-                        className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold transition hover:border-brand disabled:cursor-wait disabled:opacity-70"
+                        className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold transition hover:border-brand"
                       >
-                        {isAddingVocab ? uiLabels.addingVocab : uiLabels.addVocab}
+                        {uiLabels.collapse}
                       </button>
-                    </div>
-                  ) : null}
-                </div>
-                {!collapsedLineIds.includes(line.id) ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      toggleLineCollapse(line.id)
-                    }}
-                    className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold transition hover:border-brand"
-                  >
-                    {uiLabels.collapse}
-                  </button>
-                ) : null}
-              </div>
+                    ) : null}
+                  </div>
                 )
               })()}
 
@@ -919,128 +995,138 @@ export function AdminMusicForm({
                     {vocabs
                       .filter((entry) => entry.lineId === line.id)
                       .map((vocab, vocabIndex) => (
-                      <div
-                        key={vocab.id}
-                        className="rounded-[20px] border border-border/70 bg-surface-strong p-4"
-                      >
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold text-brand-strong">
-                            {uiLabels.vocabTitle} {vocabIndex + 1}
+                        <div
+                          key={vocab.id}
+                          className="rounded-[20px] border border-border/70 bg-surface-strong p-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-brand-strong">
+                              {uiLabels.vocabTitle} {vocabIndex + 1}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVocabs((current) =>
+                                  current.filter(
+                                    (entry) => entry.id !== vocab.id,
+                                  ),
+                                )
+                              }
+                              className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-600 transition hover:border-red-300"
+                            >
+                              {uiLabels.delete}
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVocabs((current) =>
-                                current.filter((entry) => entry.id !== vocab.id),
-                              )
-                            }
-                            className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-600 transition hover:border-red-300"
-                          >
-                            {uiLabels.delete}
-                          </button>
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            <FormField label={labels.word}>
+                              <input
+                                value={vocab.word}
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? { ...entry, word: event.target.value }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              />
+                            </FormField>
+
+                            <FormField label={labels.furigana}>
+                              <input
+                                value={vocab.furigana}
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? {
+                                            ...entry,
+                                            furigana: event.target.value,
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              />
+                            </FormField>
+
+                            <FormField
+                              label={`${labels.meaning} (${translationLocale.toUpperCase()})`}
+                            >
+                              <input
+                                value={vocab.meaning[translationLocale] ?? ''}
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? {
+                                            ...entry,
+                                            meaning: {
+                                              ...entry.meaning,
+                                              [translationLocale]:
+                                                event.target.value,
+                                            },
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              />
+                            </FormField>
+
+                            <FormField label={labels.example}>
+                              <input
+                                value={vocab.example}
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? {
+                                            ...entry,
+                                            example: event.target.value,
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              />
+                            </FormField>
+
+                            <FormField
+                              label={`${labels.exampleTranslation} (${translationLocale.toUpperCase()})`}
+                            >
+                              <input
+                                value={
+                                  vocab.exampleTranslation[translationLocale] ??
+                                  ''
+                                }
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? {
+                                            ...entry,
+                                            exampleTranslation: {
+                                              ...entry.exampleTranslation,
+                                              [translationLocale]:
+                                                event.target.value,
+                                            },
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              />
+                            </FormField>
+                          </div>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          <FormField label={labels.word}>
-                            <input
-                              value={vocab.word}
-                              onChange={(event) =>
-                                setVocabs((current) =>
-                                  current.map((entry) =>
-                                    entry.id === vocab.id
-                                      ? { ...entry, word: event.target.value }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
-                            />
-                          </FormField>
-
-                          <FormField label={labels.furigana}>
-                            <input
-                              value={vocab.furigana}
-                              onChange={(event) =>
-                                setVocabs((current) =>
-                                  current.map((entry) =>
-                                    entry.id === vocab.id
-                                      ? { ...entry, furigana: event.target.value }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
-                            />
-                          </FormField>
-
-                          <FormField
-                            label={`${labels.meaning} (${translationLocale.toUpperCase()})`}
-                          >
-                            <input
-                              value={vocab.meaning[translationLocale] ?? ''}
-                              onChange={(event) =>
-                                setVocabs((current) =>
-                                  current.map((entry) =>
-                                    entry.id === vocab.id
-                                      ? {
-                                          ...entry,
-                                          meaning: {
-                                            ...entry.meaning,
-                                            [translationLocale]: event.target.value,
-                                          },
-                                        }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
-                            />
-                          </FormField>
-
-                          <FormField label={labels.example}>
-                            <input
-                              value={vocab.example}
-                              onChange={(event) =>
-                                setVocabs((current) =>
-                                  current.map((entry) =>
-                                    entry.id === vocab.id
-                                      ? { ...entry, example: event.target.value }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
-                            />
-                          </FormField>
-
-                          <FormField
-                            label={`${labels.exampleTranslation} (${translationLocale.toUpperCase()})`}
-                          >
-                            <input
-                              value={
-                                vocab.exampleTranslation[translationLocale] ??
-                                ''
-                              }
-                              onChange={(event) =>
-                                setVocabs((current) =>
-                                  current.map((entry) =>
-                                    entry.id === vocab.id
-                                      ? {
-                                          ...entry,
-                                          exampleTranslation: {
-                                            ...entry.exampleTranslation,
-                                            [translationLocale]: event.target.value,
-                                          },
-                                        }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                              className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
-                            />
-                          </FormField>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
 
                     <button
                       type="button"
@@ -1072,7 +1158,9 @@ export function AdminMusicForm({
           disabled={isPending}
           className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white disabled:opacity-70"
         >
-          {isPending && submitAction === 'draft' ? '...' : dict.labels.saveDraft}
+          {isPending && submitAction === 'draft'
+            ? '...'
+            : dict.labels.saveDraft}
         </button>
         <button
           type="button"
@@ -1094,7 +1182,6 @@ export function AdminMusicForm({
           </span>
         ) : null}
       </div>
-
     </div>
   )
 }

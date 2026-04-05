@@ -220,7 +220,7 @@ export function MusicDetailClient({
   }, [activeLine])
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.28fr_0.72fr]">
       <section className="glass-panel rounded-[32px] border border-border p-5">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
@@ -241,9 +241,26 @@ export function MusicDetailClient({
             </Link>
           </div>
         </div>
-        <div className="overflow-hidden rounded-[26px] border border-border">
-          <div id="music-player-frame" className="aspect-video w-full" />
+        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-[26px] border border-border sm:max-w-xl md:max-w-2xl lg:max-w-none">
+          <div
+            id="music-player-frame"
+            className="aspect-[4/3] w-full sm:aspect-video lg:aspect-[16/9]"
+          />
         </div>
+        {activeLine ? (
+          <div className="mt-4 rounded-[24px] border border-border bg-surface p-4 lg:hidden">
+            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-brand-strong">
+                {activeLine.timeLabel}
+              </span>
+              <span className="text-muted">{dict.sections.lyrics}</span>
+            </div>
+            <p className="font-heading text-lg font-bold">{activeLine.japanese}</p>
+            <p className="mt-2 text-sm text-muted">
+              {getLocalizedText(activeLine.translation, locale)}
+            </p>
+          </div>
+        ) : null}
         <div className="mt-5 rounded-[24px] border border-border bg-brand-soft/60 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="font-heading text-lg font-bold">

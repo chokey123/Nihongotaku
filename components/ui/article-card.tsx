@@ -12,9 +12,9 @@ export function ArticleCard({
   return (
     <Link
       href={`/${locale}/article/${item.id}`}
-      className="glass-panel group flex flex-col gap-4 rounded-[28px] border border-border p-4 transition hover:-translate-y-1 hover:border-brand"
+      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
     >
-      <div className="relative h-44 overflow-hidden rounded-[22px]">
+      <div className="relative h-48 overflow-hidden">
         {item.thumbnailUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -36,7 +36,7 @@ export function ArticleCard({
           </div>
         )}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 p-4">
         <div className="flex items-center gap-2 text-xs text-muted">
           <span className="rounded-full bg-brand-soft px-3 py-1 font-semibold text-brand-strong">
             {item.type}

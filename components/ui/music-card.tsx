@@ -1,11 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import Image from 'next/image'
 
 import type { MusicItem } from '@/lib/types'
-
-function getYoutubeThumbnail(videoId: string) {
-  return videoId ? `https://img.youtube.com/vi/${videoId}/sddefault.jpg` : ''
-}
+import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 
 export function MusicCard({
   item,
@@ -18,16 +17,18 @@ export function MusicCard({
   href?: string
   metaBadge?: string
 }) {
+  const thumbnailUrl = useYoutubeThumbnail(item.youtubeId)
+
   return (
     <Link
       href={href ?? `/${locale}/music/${item.id}`}
-      className="glass-panel group flex flex-col gap-4 rounded-[28px] border border-border p-4 transition hover:-translate-y-1 hover:border-brand"
+      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
     >
-      <div className="relative h-44 overflow-hidden rounded-[22px]">
-        {item.youtubeId ? (
+      <div className="relative h-48 overflow-hidden">
+        {thumbnailUrl ? (
           <>
             <Image
-              src={getYoutubeThumbnail(item.youtubeId)}
+              src={thumbnailUrl}
               alt={`${item.title} thumbnail`}
               fill
               className="object-cover"
@@ -56,7 +57,7 @@ export function MusicCard({
           {item.favorite ? "♥" : "♡"}
         </button> */}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 p-4">
         <p className="text-sm font-medium text-muted">{item.artist}</p>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-heading text-xl font-bold tracking-tight">

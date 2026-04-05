@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { AuthButton } from "@/components/ui/auth-button";
@@ -25,10 +25,41 @@ export function SiteHeader({
 }) {
   const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
   const items = navItems(locale, dict, user?.role === "admin");
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const nextScrollY = window.scrollY;
+      const previousScrollY = lastScrollYRef.current;
+
+      if (nextScrollY <= 12) {
+        setIsVisible(true);
+      } else if (nextScrollY > previousScrollY) {
+        setIsVisible(false);
+        setIsMobileMenuOpen(false);
+      } else if (nextScrollY < previousScrollY) {
+        setIsVisible(true);
+      }
+
+      lastScrollYRef.current = nextScrollY;
+    };
+
+    lastScrollYRef.current = window.scrollY;
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
+    <header
+      className={`sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl transition-transform duration-300 ${
+        isVisible ? "translate-y-0" : "-translate-y-full"
+      }`}
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <CatLogo locale={locale} />

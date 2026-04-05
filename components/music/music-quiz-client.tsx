@@ -56,7 +56,7 @@ export function MusicQuizClient({
   const answerLocale = locale === 'ja' ? 'ZH' : locale.toUpperCase()
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-28">
       <section className="glass-panel rounded-[32px] border border-border p-6">
         <p className="text-sm text-muted">{item.artist}</p>
         <h1 className="mt-2 font-heading text-3xl font-bold">
@@ -73,6 +73,7 @@ export function MusicQuizClient({
           {questions.map((question, index) => {
             const selectedOption = selectedOptions[question.key]
             const isCorrect = selectedOption === question.correctMeaning
+            const isLocked = Boolean(selectedOption)
 
             return (
               <section
@@ -100,12 +101,15 @@ export function MusicQuizClient({
                       <button
                         key={option}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          if (isLocked) return
+
                           setSelectedOptions((current) => ({
                             ...current,
                             [question.key]: option,
                           }))
-                        }
+                        }}
+                        disabled={isLocked}
                         className={`rounded-[22px] border p-4 text-left transition ${
                           revealCorrect
                             ? 'border-emerald-400 bg-emerald-50'
@@ -114,7 +118,7 @@ export function MusicQuizClient({
                               : isSelected
                                 ? 'border-brand bg-brand-soft'
                                 : 'border-border bg-surface-strong hover:border-brand'
-                        }`}
+                        } ${isLocked ? 'cursor-default' : ''}`}
                       >
                         <span className="text-sm font-medium">{option}</span>
                       </button>
@@ -138,6 +142,16 @@ export function MusicQuizClient({
           <p className="text-sm text-muted">{copy.empty}</p>
         </section>
       )}
+      {questions.length > 0 ? (
+        <footer className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-full border border-border bg-background/92 px-5 py-3 shadow-lg backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium text-muted">{copy.score}</span>
+            <span className="font-semibold text-brand-strong">
+              {score} / {questions.length}
+            </span>
+          </div>
+        </footer>
+      ) : null}
     </div>
   )
 }

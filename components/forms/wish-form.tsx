@@ -7,7 +7,14 @@ import type { Dictionary } from "@/lib/i18n";
 
 export function WishForm({ dict }: { dict: Dictionary }) {
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [isPending, startTransition] = useTransition();
+  const successMessage =
+    dict.labels.submit === "Submit"
+      ? "Wish submitted successfully."
+      : dict.labels.submit === "提交"
+        ? "許願已成功送出。"
+        : "リクエストを送信しました。";
 
   return (
     <form
@@ -18,18 +25,20 @@ export function WishForm({ dict }: { dict: Dictionary }) {
         const formData = new FormData(form);
         startTransition(async () => {
           try {
-            const response = await backendService.submitWish({
+            await backendService.submitWish({
               artist: String(formData.get("artist") ?? ""),
               title: String(formData.get("title") ?? ""),
               genre: String(formData.get("genre") ?? ""),
               url: String(formData.get("url") ?? ""),
             });
-            setMessage(response.message);
+            setMessage(successMessage);
+            setMessageTone("success");
             form.reset();
           } catch (error) {
             setMessage(
               error instanceof Error ? error.message : "Failed to submit wish.",
             );
+            setMessageTone("error");
           }
         });
       }}
@@ -60,7 +69,13 @@ export function WishForm({ dict }: { dict: Dictionary }) {
         {isPending ? "..." : dict.labels.submit}
       </button>
       {message ? (
-        <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm text-brand-strong">
+        <p
+          className={`rounded-2xl px-4 py-3 text-sm ${
+            messageTone === "success"
+              ? "bg-brand-soft text-brand-strong"
+              : "border border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
           {message}
         </p>
       ) : null}

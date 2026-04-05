@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 
 import { backendService } from '@/lib/services/backend-service'
@@ -51,6 +52,7 @@ export function AdminMusicQuizForm({
   initialSelectedKeys: string[]
   locale: Locale
 }) {
+  const router = useRouter()
   const [selectedKeys, setSelectedKeys] = useState<string[]>(initialSelectedKeys)
   const [status, setStatus] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -134,6 +136,9 @@ export function AdminMusicQuizForm({
                 selectedKeys,
               )
               setStatus(`${copy.saved}${response.id}.`)
+              if (item.isPublished && selectedKeys.length > 0) {
+                router.replace(`/${locale}/music/quiz/${item.id}`)
+              }
             })
           }
           className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white disabled:opacity-70"

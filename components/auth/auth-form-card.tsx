@@ -108,6 +108,7 @@ export function AuthFormCard({
               <input
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
+                suppressHydrationWarning
                 className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none transition focus:border-brand"
                 required
               />
@@ -120,6 +121,7 @@ export function AuthFormCard({
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              suppressHydrationWarning
               className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none transition focus:border-brand"
               required
             />
@@ -131,6 +133,7 @@ export function AuthFormCard({
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              suppressHydrationWarning
               className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none transition focus:border-brand"
               required
               minLength={6}
