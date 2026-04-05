@@ -14,16 +14,27 @@ export function ArticleCard({
       href={`/${locale}/article/${item.id}`}
       className="glass-panel group flex flex-col gap-4 rounded-[28px] border border-border p-4 transition hover:-translate-y-1 hover:border-brand"
     >
-      <div
-        className="relative h-44 overflow-hidden rounded-[22px]"
-        style={{
-          background: `linear-gradient(135deg, ${item.palette.from}, ${item.palette.to})`,
-        }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.35),transparent_28%)]" />
-        <div className="absolute bottom-4 left-4 rounded-full bg-white/26 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-          {item.thumbnailLabel}
-        </div>
+      <div className="relative h-44 overflow-hidden rounded-[22px]">
+        {item.thumbnailUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={item.thumbnailUrl}
+              alt={item.title}
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+          </>
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(135deg, ${item.palette.from}, ${item.palette.to})`,
+            }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.35),transparent_28%)]" />
+          </div>
+        )}
       </div>
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted">

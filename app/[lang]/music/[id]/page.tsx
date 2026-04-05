@@ -5,6 +5,8 @@ import { backendService } from "@/lib/services/backend-service";
 import { getDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function MusicDetailPage({
   params,
 }: PageProps<"/[lang]/music/[id]">) {

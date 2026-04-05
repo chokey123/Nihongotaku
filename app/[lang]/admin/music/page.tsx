@@ -1,10 +1,9 @@
 import { AdminGuard } from "@/components/admin/admin-guard";
-import { AdminMusicForm } from "@/components/admin/admin-music-form";
+import { AdminMusicLibraryShell } from "@/components/admin/admin-music-library-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getDictionary } from "@/lib/i18n";
-import type { Locale } from "@/lib/types";
 
-export default async function AdminMusicCreatePage({
+export default async function AdminMusicLibraryPage({
   params,
 }: PageProps<"/[lang]/admin/music">) {
   const { lang } = await params;
@@ -13,15 +12,21 @@ export default async function AdminMusicCreatePage({
   return (
     <div className="space-y-8 pb-10">
       <SectionHeading
-        eyebrow="Admin / Music"
-        title={dict.labels.createMusic}
-        description="Mock upload flow for URL + LRC + vocab mapping."
+        eyebrow={`${dict.sections.admin} / ${dict.sections.songLibrary}`}
+        title={dict.pages.adminMusicLibraryTitle}
+        description={dict.pages.adminMusicLibraryDescription}
       />
       <AdminGuard deniedMessage={dict.labels.accessDenied} hint={dict.labels.adminHint}>
-        <AdminMusicForm
-          dict={dict}
-          mode="create"
-          initialLocale={lang as Locale}
+        <AdminMusicLibraryShell
+          locale={lang}
+          mode="music"
+          searchPlaceholder={dict.controls.searchMusic}
+          loadingLabel={dict.status.loadingMusicLibrary}
+          errorLabel={dict.status.failedMusicLibrary}
+          newLabel={dict.controls.new}
+          publishedLabel={dict.controls.published}
+          draftLabel={dict.controls.draft}
+          quizLabel={dict.sections.quiz}
         />
       </AdminGuard>
     </div>

@@ -4,6 +4,8 @@ import { ReadonlyEditor } from "@/components/article/readonly-editor";
 import { backendService } from "@/lib/services/backend-service";
 import { getDictionary } from "@/lib/i18n";
 
+export const dynamic = "force-dynamic";
+
 export default async function ArticleDetailPage({
   params,
 }: PageProps<"/[lang]/article/[id]">) {

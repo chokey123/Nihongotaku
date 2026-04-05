@@ -3,9 +3,19 @@ import type {
   AuthUser,
   HomePayload,
   LocalizedText,
+  LyricLine,
   MusicItem,
+  MusicVocabItem,
   WishPayload,
 } from "@/lib/types";
+
+type LegacyLyricLine = LyricLine & {
+  vocab: Array<Omit<MusicVocabItem, "id" | "lineId">>;
+};
+
+type LegacyMusicItem = Omit<MusicItem, "lyrics" | "vocab"> & {
+  lyrics: LegacyLyricLine[];
+};
 
 const localized = (zh: string, en = zh, ja = zh): LocalizedText => ({
   zh,
@@ -19,7 +29,7 @@ export const mockUser: AuthUser = {
   role: "admin",
 };
 
-export const musicCatalog: MusicItem[] = [
+export const musicCatalog: LegacyMusicItem[] = [
   {
     id: "night-dancer",
     title: "NIGHT DANCER",
@@ -29,6 +39,7 @@ export const musicCatalog: MusicItem[] = [
     thumbnailLabel: "Moonlight",
     palette: { from: "#ffd8c7", to: "#ff8f70", accent: "#ffffff" },
     youtubeId: "kagoEGKHZvU",
+    quizVocabKeys: ["nd-1-0", "nd-2-0"],
     lyrics: [
       {
         id: "nd-1",
@@ -112,6 +123,7 @@ export const musicCatalog: MusicItem[] = [
     thumbnailLabel: "Scarlet Flame",
     palette: { from: "#ffc9c5", to: "#ef4444", accent: "#fff7ed" },
     youtubeId: "CwkzK-F0Y00",
+    quizVocabKeys: ["gr-1-0", "gr-2-0"],
     lyrics: [
       {
         id: "gr-1",
@@ -172,6 +184,7 @@ export const musicCatalog: MusicItem[] = [
     thumbnailLabel: "Stage Spark",
     palette: { from: "#fde68a", to: "#fb7185", accent: "#312e81" },
     youtubeId: "ZRtdQ81jPUQ",
+    quizVocabKeys: ["id-1-0", "id-1-1"],
     lyrics: [
       {
         id: "id-1",
@@ -231,6 +244,7 @@ export const musicCatalog: MusicItem[] = [
     thumbnailLabel: "Soft Rain",
     palette: { from: "#c4e0ff", to: "#6b9cff", accent: "#eff6ff" },
     youtubeId: "TQ8WlA2GXbk",
+    quizVocabKeys: ["pt-1-0"],
     lyrics: [
       {
         id: "pt-1",
@@ -267,7 +281,7 @@ export const articleCatalog: ArticleItem[] = [
     type: "歌词解析",
     artist: "imase",
     excerpt: "从 どうでもいい 到 煌めき，整理这首歌里很常见的感性表达。",
-    thumbnailLabel: "Late Night Notes",
+    thumbnailUrl: "",
     palette: { from: "#ffe5d9", to: "#ffb4a2", accent: "#7c2d12" },
     content: {
       type: "doc",
@@ -322,7 +336,7 @@ export const articleCatalog: ArticleItem[] = [
     type: "单词整理",
     artist: "LiSA",
     excerpt: "把“強くなれる理由”这类高频表达拆开看，背单词会轻松很多。",
-    thumbnailLabel: "Fire Notes",
+    thumbnailUrl: "",
     palette: { from: "#ffd1d1", to: "#f87171", accent: "#450a0a" },
     content: {
       type: "doc",
@@ -350,7 +364,7 @@ export const articleCatalog: ArticleItem[] = [
     type: "文化随笔",
     artist: "YOASOBI",
     excerpt: "从节奏、拟态和角色设定，拆开看 Idol 的语言魅力。",
-    thumbnailLabel: "Spotlight",
+    thumbnailUrl: "",
     palette: { from: "#fff1a8", to: "#f472b6", accent: "#4a044e" },
     content: {
       type: "doc",
@@ -378,7 +392,7 @@ export const homePayload: HomePayload = {
   newReleases: musicCatalog.slice(0, 3),
   trendingSongs: [musicCatalog[2], musicCatalog[0], musicCatalog[3]],
   latestArticles: articleCatalog,
-};
+} as unknown as HomePayload;
 
 export const mockWishHistory: WishPayload[] = [
   {

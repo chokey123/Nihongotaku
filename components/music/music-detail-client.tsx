@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
 import type { Locale, LocalizedText, MusicItem } from '@/lib/types'
@@ -192,6 +193,9 @@ export function MusicDetailClient({
   }, [currentMs, item.lyrics])
 
   const selectedLine = activeLine
+  const selectedLineVocabs = selectedLine
+    ? item.vocab.filter((vocab) => vocab.lineId === selectedLine.id)
+    : []
 
   useEffect(() => {
     const container = lyricsContainerRef.current
@@ -225,9 +229,17 @@ export function MusicDetailClient({
               {item.title}
             </h1>
           </div>
-          <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
-            {item.genre}
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
+              {item.genre}
+            </span>
+            <Link
+              href={`/${locale}/music/quiz/${item.id}`}
+              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
+            >
+              {dict.sections.quiz}
+            </Link>
+          </div>
         </div>
         <div className="overflow-hidden rounded-[26px] border border-border">
           <div id="music-player-frame" className="aspect-video w-full" />
@@ -241,11 +253,11 @@ export function MusicDetailClient({
               {selectedLine?.timeLabel}
             </span>
           </div>
-          {selectedLine?.vocab.length ? (
+          {selectedLineVocabs.length ? (
             <div className="grid gap-3 md:grid-cols-2">
-              {selectedLine.vocab.map((vocab) => (
+              {selectedLineVocabs.map((vocab) => (
                 <article
-                  key={`${selectedLine.id}-${vocab.word}`}
+                  key={vocab.id}
                   className="rounded-[22px] bg-surface-strong p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -307,7 +319,8 @@ export function MusicDetailClient({
                     {line.timeLabel}
                   </span>
                   <span className="text-muted">
-                    {line.vocab.length} {dict.sections.vocab}
+                    {item.vocab.filter((vocab) => vocab.lineId === line.id).length}{' '}
+                    {dict.sections.vocab}
                   </span>
                 </div>
                 <p className="font-heading text-lg font-bold">

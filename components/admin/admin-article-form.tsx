@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { ArticleEditor } from "@/components/article/article-editor";
 import { backendService } from "@/lib/services/backend-service";
@@ -12,37 +13,71 @@ const emptyDoc: Record<string, unknown> = {
   content: [{ type: "paragraph" }],
 };
 
+function isValidHttpUrl(value: string) {
+  if (!value.trim()) return false;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function AdminArticleForm({
   dict,
   initialArticle,
   mode,
+  locale,
 }: {
   dict: Dictionary;
   initialArticle?: ArticleItem;
   mode: "create" | "edit";
+  locale: string;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState("");
   const [title, setTitle] = useState(initialArticle?.title ?? "");
   const [type, setType] = useState(initialArticle?.type ?? "");
   const [artist, setArtist] = useState(initialArticle?.artist ?? "");
-  const [thumbnailLabel, setThumbnailLabel] = useState(initialArticle?.thumbnailLabel ?? "Thumbnail label");
+  const [thumbnailUrl, setThumbnailUrl] = useState(initialArticle?.thumbnailUrl ?? "");
   const [content, setContent] = useState<Record<string, unknown>>(initialArticle?.content ?? emptyDoc);
+  const thumbnailPreviewUrl = isValidHttpUrl(thumbnailUrl) ? thumbnailUrl : "";
 
   const onSubmit = () => {
     startTransition(async () => {
-      const payload = { title, type, artist, thumbnailLabel, content };
+      const payload = { title, type, artist, thumbnailUrl, content };
       const response =
         mode === "create"
           ? await backendService.createArticle(payload)
           : await backendService.updateArticle(initialArticle?.id ?? "unknown", payload);
 
-      setStatus(`Saved ${response.id} for ${payload.artist}.`);
+      setStatus(`${dict.labels.saveDraft} · ${response.id}`);
+      if (mode === "create") {
+        router.replace(`/${locale}/admin/article/${response.id}`);
+      }
     });
   };
 
   return (
     <div className="glass-panel rounded-[32px] border border-border p-6">
+      {thumbnailPreviewUrl ? (
+        <div className="mb-6 overflow-hidden rounded-[28px] border border-border bg-surface">
+          <div className="border-b border-border px-4 py-3 text-sm font-medium text-muted">
+            {dict.labels.thumbnailLabel}
+          </div>
+          <div className="relative aspect-[16/9] bg-surface-strong">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={thumbnailPreviewUrl}
+              alt={`${title || dict.labels.title} preview`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-2 text-sm">
           <span>{dict.labels.title}</span>
@@ -57,8 +92,14 @@ export function AdminArticleForm({
           <input value={artist} onChange={(event) => setArtist(event.target.value)} className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
         </label>
         <label className="space-y-2 text-sm">
-          <span>Thumbnail label</span>
-          <input value={thumbnailLabel} onChange={(event) => setThumbnailLabel(event.target.value)} className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none" />
+          <span>{dict.labels.thumbnailLabel}</span>
+          <input
+            type="url"
+            value={thumbnailUrl}
+            onChange={(event) => setThumbnailUrl(event.target.value)}
+            placeholder="https://..."
+            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+          />
         </label>
       </div>
       <div className="mt-5 space-y-3">

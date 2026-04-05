@@ -17,14 +17,20 @@ export function WishForm({ dict }: { dict: Dictionary }) {
         const form = event.currentTarget;
         const formData = new FormData(form);
         startTransition(async () => {
-          const response = await backendService.submitWish({
-            artist: String(formData.get("artist") ?? ""),
-            title: String(formData.get("title") ?? ""),
-            genre: String(formData.get("genre") ?? ""),
-            url: String(formData.get("url") ?? ""),
-          });
-          setMessage(response.message);
-          form.reset();
+          try {
+            const response = await backendService.submitWish({
+              artist: String(formData.get("artist") ?? ""),
+              title: String(formData.get("title") ?? ""),
+              genre: String(formData.get("genre") ?? ""),
+              url: String(formData.get("url") ?? ""),
+            });
+            setMessage(response.message);
+            form.reset();
+          } catch (error) {
+            setMessage(
+              error instanceof Error ? error.message : "Failed to submit wish.",
+            );
+          }
         });
       }}
     >

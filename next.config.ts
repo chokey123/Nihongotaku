@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
         hostname: "pdyqkrxolbapxzddqzox.supabase.co",
         pathname: "/storage/v1/object/sign/nihongotaku/**",
       },
+      {
+        protocol: "https",
+        hostname: "pdyqkrxolbapxzddqzox.supabase.co",
+        pathname: "/storage/v1/object/public/nihongotaku/**",
+      },
+      {
+        protocol: "https",
+        hostname: "img.youtube.com",
+        pathname: "/vi/**",
+      },
     ],
   },
 };

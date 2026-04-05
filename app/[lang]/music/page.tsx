@@ -4,6 +4,8 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { backendService } from "@/lib/services/backend-service";
 import { getDictionary } from "@/lib/i18n";
 
+export const dynamic = "force-dynamic";
+
 export default async function MusicPage({
   params,
   searchParams,
@@ -16,13 +18,14 @@ export default async function MusicPage({
   return (
     <div className="space-y-8 pb-10">
       <SectionHeading
-        eyebrow="Music"
+        eyebrow={dict.sections.songLibrary}
         title={dict.sections.songLibrary}
-        description="Search through the mock song catalog for the demo."
+        description={dict.pages.musicPageDescription}
       />
       <SearchBar
         defaultValue={typeof q === "string" ? q : ""}
         placeholder={dict.controls.searchMusic}
+        buttonLabel={dict.controls.search}
       />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {music.map((item) => (

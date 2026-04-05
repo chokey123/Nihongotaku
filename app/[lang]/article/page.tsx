@@ -4,6 +4,8 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { backendService } from "@/lib/services/backend-service";
 import { getDictionary } from "@/lib/i18n";
 
+export const dynamic = "force-dynamic";
+
 export default async function ArticlePage({
   params,
   searchParams,
@@ -18,13 +20,14 @@ export default async function ArticlePage({
   return (
     <div className="space-y-8 pb-10">
       <SectionHeading
-        eyebrow="Article"
+        eyebrow={dict.sections.articleLibrary}
         title={dict.sections.articleLibrary}
-        description="All article content is demo-only and rendered from hardcoded mock content."
+        description={dict.pages.articlePageDescription}
       />
       <SearchBar
         defaultValue={typeof q === "string" ? q : ""}
         placeholder={dict.controls.searchArticle}
+        buttonLabel={dict.controls.search}
       />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {articles.map((item) => (

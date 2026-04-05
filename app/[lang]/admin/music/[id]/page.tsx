@@ -1,9 +1,8 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { AdminGuard } from "@/components/admin/admin-guard";
-import { AdminMusicForm } from "@/components/admin/admin-music-form";
+import { AdminMusicEditorShell } from "@/components/admin/admin-music-editor-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { backendService } from "@/lib/services/backend-service";
 import { getDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/types";
 
@@ -12,23 +11,28 @@ export default async function AdminMusicEditPage({
 }: PageProps<"/[lang]/admin/music/[id]">) {
   const { lang, id } = await params;
   const dict = await getDictionary(lang);
-  const music = await backendService.getMusicById(id);
-
-  if (!music) notFound();
 
   return (
     <div className="space-y-8 pb-10">
       <SectionHeading
-        eyebrow="Admin / Music"
+        eyebrow={`${dict.sections.admin} / ${dict.sections.songLibrary}`}
         title={dict.labels.editMusic}
-        description={`Editing ${music.title} with mock data.`}
+        description={dict.pages.adminMusicEditDescription}
       />
       <AdminGuard deniedMessage={dict.labels.accessDenied} hint={dict.labels.adminHint}>
-        <AdminMusicForm
+        <div className="mb-4 flex justify-end">
+          <Link
+            href={`/${lang}/admin/music/quiz/${id}`}
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
+          >
+            {dict.actions.manageQuiz}
+          </Link>
+        </div>
+        <AdminMusicEditorShell
           dict={dict}
-          initialMusic={music}
+          musicId={id}
           mode="edit"
-          initialLocale={lang as Locale}
+          locale={lang as Locale}
         />
       </AdminGuard>
     </div>

@@ -11,13 +11,25 @@ export interface VocabItem {
   exampleTranslation: LocalizedText;
 }
 
+export interface MusicVocabItem extends VocabItem {
+  id: string;
+  lineId: string;
+}
+
+export interface MusicQuizQuestion {
+  key: string;
+  word: string;
+  furigana: string;
+  correctMeaning: string;
+  options: string[];
+}
+
 export interface LyricLine {
   id: string;
   atMs: number;
   timeLabel: string;
   japanese: string;
   translation: LocalizedText;
-  vocab: VocabItem[];
 }
 
 export interface MusicItem {
@@ -25,6 +37,7 @@ export interface MusicItem {
   title: string;
   artist: string;
   genre: string;
+  sourceUrl?: string;
   favorite: boolean;
   thumbnailLabel: string;
   palette: {
@@ -33,7 +46,10 @@ export interface MusicItem {
     accent: string;
   };
   youtubeId: string;
+  isPublished?: boolean;
   lyrics: LyricLine[];
+  vocab: MusicVocabItem[];
+  quizVocabKeys: string[];
 }
 
 export interface ArticleItem {
@@ -42,7 +58,8 @@ export interface ArticleItem {
   type: string;
   artist: string;
   excerpt: string;
-  thumbnailLabel: string;
+  thumbnailUrl: string;
+  isPublished?: boolean;
   palette: {
     from: string;
     to: string;
@@ -58,19 +75,27 @@ export interface WishPayload {
   url: string;
 }
 
+export interface WishRequestItem extends WishPayload {
+  id: string;
+  status?: string;
+  createdAt?: string;
+}
+
 export interface MusicDraftPayload {
   sourceUrl: string;
   title: string;
   artist: string;
   genre: string;
   lyrics: LyricLine[];
+  vocab: MusicVocabItem[];
+  quizVocabKeys?: string[];
 }
 
 export interface ArticleDraftPayload {
   title: string;
   type: string;
   artist: string;
-  thumbnailLabel: string;
+  thumbnailUrl: string;
   content: Record<string, unknown>;
 }
 
@@ -82,6 +107,7 @@ export interface HomePayload {
 
 export interface AuthUser {
   id: string;
+  email?: string;
   name: string;
   role: UserRole;
 }

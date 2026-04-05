@@ -1,20 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next'
 
-import "./globals.css";
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "Nihongotaku",
-  description: "Learn Japanese with JPOP through a playful minimalist interface.",
-};
+  title: 'Nihongotaku',
+  description:
+    'Learn Japanese with JPOP through a playful minimalist interface.',
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
-    <html lang="ja" suppressHydrationWarning>
+    <html lang="zh" suppressHydrationWarning>
       <body>{children}</body>
     </html>
-  );
+  )
 }

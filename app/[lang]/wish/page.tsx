@@ -11,9 +11,9 @@ export default async function WishPage({
   return (
     <div className="space-y-8 pb-10">
       <SectionHeading
-        eyebrow="Wish"
+        eyebrow={dict.nav.wish}
         title={dict.sections.request}
-        description="A simple demo form that goes through the shared backend service wrapper."
+        description={dict.pages.wishPageDescription}
       />
       <WishForm dict={dict} />
     </div>
