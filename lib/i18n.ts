@@ -15,12 +15,14 @@ export const dictionary = {
       musicSearch: '歌曲查询',
       articles: '文章',
       wish: '许愿',
+      upload: '上传',
     },
     controls: {
       theme: '主题切换',
       login: '登录',
       logout: '登出',
       admin: 'Admin',
+      upload: '上传',
       searchMusic: '搜索歌曲、歌手或风格',
       searchArticle: '搜索文章、歌手或类型',
       search: '搜索',
@@ -42,6 +44,7 @@ export const dictionary = {
       video: '视频',
       request: '许愿表单',
       admin: '后台管理',
+      upload: '上传中心',
       quiz: 'Quiz',
     },
     labels: {
@@ -101,6 +104,19 @@ export const dictionary = {
       adminQuizLibraryDescription: '选择歌曲并管理它的词汇 Quiz。',
       adminWishTitle: '许愿清单',
       adminWishDescription: '查看公开表单送出的歌曲请求，并删除已处理项目。',
+      uploadHubDescription: '欢迎上传新的歌曲、文章与单字 Quiz 内容。',
+      uploadMusicLibraryTitle: '我的歌曲上传',
+      uploadMusicLibraryDescription:
+        '管理你上传的歌曲草稿，admin 可以看到所有人的内容。',
+      uploadMusicCreateDescription: '上传新歌曲并建立歌词与单字内容。',
+      uploadMusicEditDescription: '编辑你上传的歌曲资料、歌词与单字。',
+      uploadArticleLibraryTitle: '我的文章上传',
+      uploadArticleLibraryDescription:
+        '管理你上传的文章草稿，admin 可以看到所有人的内容。',
+      uploadArticleCreateDescription: '建立新文章并储存为草稿。',
+      uploadArticleEditDescription: '编辑你上传的文章内容。',
+      uploadQuizLibraryTitle: '我的 Quiz 上传',
+      uploadQuizLibraryDescription: '选择你上传的歌曲，管理单字 Quiz。',
     },
     auth: {
       loginTitle: '登录',
@@ -161,12 +177,14 @@ export const dictionary = {
       musicSearch: 'Song Search',
       articles: 'Articles',
       wish: 'Wish',
+      upload: 'Upload',
     },
     controls: {
       theme: 'Toggle theme',
       login: 'Login',
       logout: 'Logout',
       admin: 'Admin',
+      upload: 'Upload',
       searchMusic: 'Search songs, artists, or genres',
       searchArticle: 'Search articles, artists, or types',
       search: 'Search',
@@ -188,6 +206,7 @@ export const dictionary = {
       video: 'Video',
       request: 'Wish Form',
       admin: 'Admin',
+      upload: 'Upload Hub',
       quiz: 'Quiz',
     },
     labels: {
@@ -256,6 +275,25 @@ export const dictionary = {
       adminWishTitle: 'Wish Requests',
       adminWishDescription:
         'Review public song requests and delete entries that are already handled.',
+      uploadHubDescription:
+        'Welcome! Share songs, articles, and quiz-ready vocab with the community.',
+      uploadMusicLibraryTitle: 'My Music Uploads',
+      uploadMusicLibraryDescription:
+        'Manage your uploaded song drafts. Admins can see uploads from everyone.',
+      uploadMusicCreateDescription:
+        'Upload a new song and build its lyrics and vocab content.',
+      uploadMusicEditDescription:
+        'Edit the metadata, lyrics, and vocab for your uploaded song.',
+      uploadArticleLibraryTitle: 'My Article Uploads',
+      uploadArticleLibraryDescription:
+        'Manage your uploaded article drafts. Admins can see uploads from everyone.',
+      uploadArticleCreateDescription:
+        'Create a new article and save it as a draft.',
+      uploadArticleEditDescription:
+        'Edit the content of your uploaded article.',
+      uploadQuizLibraryTitle: 'My Quiz Uploads',
+      uploadQuizLibraryDescription:
+        'Choose one of your uploaded songs and manage its vocab quiz.',
     },
     auth: {
       loginTitle: 'Log in',
@@ -320,12 +358,14 @@ export const dictionary = {
       musicSearch: '歌曲查詢',
       articles: '文章',
       wish: '許願',
+      upload: '上傳',
     },
     controls: {
       theme: '切換主題',
       login: '登入',
       logout: '登出',
       admin: '管理',
+      upload: '上傳',
       searchMusic: '搜尋歌曲、歌手或曲風',
       searchArticle: '搜尋文章、歌手或類型',
       search: '搜尋',
@@ -347,6 +387,7 @@ export const dictionary = {
       video: '影片',
       request: '許願表單',
       admin: '後台管理',
+      upload: '上傳中心',
       quiz: '測驗',
     },
     labels: {
@@ -399,18 +440,28 @@ export const dictionary = {
       adminMusicEditDescription: '編輯音樂資料、歌詞、單字與發佈狀態。',
       adminArticleLibraryTitle: '文章庫',
       adminArticleLibraryDescription: '搜尋文章、建立新草稿，或編輯現有內容。',
-      adminArticleCreateDescription:
-        '使用 TipTap 編輯器建立文章並儲存到資料庫。',
-      adminArticleEditDescription: '使用 TipTap 編輯器修改文章內容。',
+      adminArticleCreateDescription: '建立文章並儲存到資料庫。',
+      adminArticleEditDescription: '修改文章內容。',
       adminQuizLibraryTitle: '測驗庫',
       adminQuizLibraryDescription: '選擇歌曲並管理它的單字測驗。',
       adminWishTitle: '許願清單',
       adminWishDescription: '查看公開表單送出的歌曲請求，並刪除已處理項目。',
+      uploadHubDescription: '歡迎上傳新的歌曲、文章與單字測驗內容。',
+      uploadMusicLibraryTitle: '我的歌曲上傳',
+      uploadMusicLibraryDescription: '管理你上傳的歌曲草稿',
+      uploadMusicCreateDescription: '上傳新歌曲並建立歌詞與單字內容。',
+      uploadMusicEditDescription: '編輯你上傳的歌曲資料、歌詞與單字。',
+      uploadArticleLibraryTitle: '我的文章上傳',
+      uploadArticleLibraryDescription: '管理你上傳的文章草稿',
+      uploadArticleCreateDescription: '建立新文章並儲存為草稿。',
+      uploadArticleEditDescription: '編輯你上傳的文章內容。',
+      uploadQuizLibraryTitle: '我的測驗上傳',
+      uploadQuizLibraryDescription: '選擇你上傳的歌曲，管理單字測驗。',
     },
     auth: {
       loginTitle: '登入',
       signupTitle: '建立帳號',
-      loginSubtitle: '使用 Supabase 帳號登入以進入管理功能。',
+      loginSubtitle: '帳號登入',
       signupSubtitle: '使用 Email 與密碼建立新帳號。',
       accountCreatedConfirm: '帳號已建立，請先完成 Email 驗證再登入。',
       accountCreatedSuccess: '帳號建立成功，現在可以繼續使用。',

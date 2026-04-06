@@ -10,6 +10,8 @@ import type { MusicItem } from '@/lib/types'
 export function AdminMusicLibraryShell({
   locale,
   mode,
+  basePath = 'admin',
+  scope = 'admin',
   searchPlaceholder,
   loadingLabel,
   errorLabel,
@@ -20,6 +22,8 @@ export function AdminMusicLibraryShell({
 }: {
   locale: string
   mode: 'music' | 'quiz'
+  basePath?: 'admin' | 'upload'
+  scope?: 'admin' | 'upload'
   searchPlaceholder: string
   loadingLabel: string
   errorLabel: string
@@ -33,14 +37,20 @@ export function AdminMusicLibraryShell({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
-    if (isLoading || user?.role !== 'admin') {
+    if (isLoading || !user || (scope === 'admin' && user.role !== 'admin')) {
       return
     }
 
     let isMounted = true
 
-    backendService
-      .searchMusic('', { includeUnpublished: true })
+    const loadItems =
+      scope === 'admin'
+        ? backendService.searchMusic('', { includeUnpublished: true })
+        : backendService.searchMusicUploads(
+            user.role === 'admin' ? undefined : user.id,
+          )
+
+    loadItems
       .then((nextItems) => {
         if (!isMounted) return
         setItems(nextItems)
@@ -54,7 +64,7 @@ export function AdminMusicLibraryShell({
     return () => {
       isMounted = false
     }
-  }, [isLoading, user?.role])
+  }, [isLoading, scope, user])
 
   if (isLoading || status === 'loading') {
     return (
@@ -77,11 +87,34 @@ export function AdminMusicLibraryShell({
       items={items}
       locale={locale}
       mode={mode}
+      basePath={basePath}
       searchPlaceholder={searchPlaceholder}
       newLabel={newLabel}
       publishedLabel={publishedLabel}
       draftLabel={draftLabel}
       quizLabel={quizLabel}
+      allowDelete={scope === 'admin' && mode === 'music' && user?.role === 'admin'}
+      deleteLabel={
+        locale === 'en' ? 'Delete' : locale === 'ja' ? '削除' : '刪除'
+      }
+      deleteConfirmTitle={
+        locale === 'en'
+          ? 'Are you sure you want to delete this music?'
+          : locale === 'ja'
+            ? 'この楽曲を削除してもよろしいですか？'
+            : '確定要刪除嗎？'
+      }
+      deleteConfirmDescription={
+        locale === 'en'
+          ? 'Only unpublished music can be deleted. You can either confirm or cancel.'
+          : locale === 'ja'
+            ? '未公開の楽曲のみ削除できます。確認するか、キャンセルしてください。'
+            : '只能刪除未發佈的歌曲。你可以確認刪除，或選擇取消。'
+      }
+      cancelLabel={locale === 'en' ? 'Cancel' : locale === 'ja' ? 'キャンセル' : '取消'}
+      confirmDeleteLabel={
+        locale === 'en' ? 'Confirm delete' : locale === 'ja' ? '削除を確認' : '確認刪除'
+      }
     />
   )
 }

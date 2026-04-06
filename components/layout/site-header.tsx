@@ -9,10 +9,16 @@ import { CatLogo } from "@/components/ui/cat-logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { Dictionary } from "@/lib/i18n";
 
-const navItems = (locale: string, dict: Dictionary, isAdmin: boolean) => [
+const navItems = (
+  locale: string,
+  dict: Dictionary,
+  isLoggedIn: boolean,
+  isAdmin: boolean,
+) => [
   { href: `/${locale}/music`, label: dict.nav.musicSearch },
   { href: `/${locale}/article`, label: dict.nav.articles },
   { href: `/${locale}/wish`, label: dict.nav.wish },
+  ...(isLoggedIn ? [{ href: `/${locale}/upload`, label: dict.nav.upload }] : []),
   ...(isAdmin ? [{ href: `/${locale}/admin`, label: dict.controls.admin }] : []),
 ];
 
@@ -27,7 +33,7 @@ export function SiteHeader({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollYRef = useRef(0);
-  const items = navItems(locale, dict, user?.role === "admin");
+  const items = navItems(locale, dict, Boolean(user), user?.role === "admin");
 
   useEffect(() => {
     const handleScroll = () => {

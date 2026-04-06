@@ -1,5 +1,6 @@
 export type Locale = "ja" | "en" | "zh";
 export type LocalizedText = Partial<Record<Locale, string>>;
+export type MusicSubmissionSource = "upload" | "wish";
 
 export type UserRole = "guest" | "admin";
 
@@ -24,6 +25,23 @@ export interface MusicQuizQuestion {
   options: string[];
 }
 
+export interface MusicQuizAttemptAnswer {
+  questionKey: string;
+  selectedMeaning: string;
+  correctMeaning: string;
+  isCorrect: boolean;
+}
+
+export interface MusicQuizAttemptRecord {
+  id: string;
+  musicId: string;
+  userId: string;
+  score: number;
+  totalQuestions: number;
+  answers: MusicQuizAttemptAnswer[];
+  createdAt?: string;
+}
+
 export interface LyricLine {
   id: string;
   atMs: number;
@@ -37,6 +55,11 @@ export interface MusicItem {
   title: string;
   artist: string;
   genre: string;
+  createdBy?: string;
+  creatorRole?: UserRole;
+  submissionSource?: MusicSubmissionSource;
+  createdAt?: string;
+  reviewRequestedAt?: string | null;
   sourceUrl?: string;
   favorite: boolean;
   thumbnailLabel: string;
@@ -57,6 +80,7 @@ export interface ArticleItem {
   title: string;
   type: string;
   artist: string;
+  createdBy?: string;
   excerpt: string;
   thumbnailUrl: string;
   isPublished?: boolean;
@@ -89,6 +113,8 @@ export interface MusicDraftPayload {
   lyrics: LyricLine[];
   vocab: MusicVocabItem[];
   quizVocabKeys?: string[];
+  submissionSource?: MusicSubmissionSource;
+  reviewRequestedAt?: string | null;
 }
 
 export interface ArticleDraftPayload {

@@ -11,19 +11,18 @@ export function MusicCard({
   locale,
   href,
   metaBadge,
+  disableLink = false,
 }: {
   item: MusicItem
   locale: string
   href?: string
   metaBadge?: string
+  disableLink?: boolean
 }) {
   const thumbnailUrl = useYoutubeThumbnail(item.youtubeId)
 
-  return (
-    <Link
-      href={href ?? `/${locale}/music/${item.id}`}
-      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
-    >
+  const content = (
+    <>
       <div className="relative h-48 overflow-hidden">
         {thumbnailUrl ? (
           <>
@@ -47,15 +46,6 @@ export function MusicCard({
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.35),transparent_28%)]" />
           </>
         )}
-        {/* <div className="absolute bottom-4 left-4 rounded-full bg-white/28 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-          {item.thumbnailLabel}
-        </div> */}
-        {/* <button
-          type="button"
-          className="absolute right-4 top-4 rounded-full bg-white/24 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm"
-        >
-          {item.favorite ? "♥" : "♡"}
-        </button> */}
       </div>
       <div className="space-y-2 p-4">
         <p className="text-sm font-medium text-muted">{item.artist}</p>
@@ -71,6 +61,23 @@ export function MusicCard({
           <p className="text-xs font-semibold text-brand-strong">{metaBadge}</p>
         ) : null}
       </div>
+    </>
+  )
+
+  if (disableLink) {
+    return (
+      <article className="glass-panel flex flex-col overflow-hidden rounded-[28px] border border-border">
+        {content}
+      </article>
+    )
+  }
+
+  return (
+    <Link
+      href={href ?? `/${locale}/music/${item.id}`}
+      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
+    >
+      {content}
     </Link>
   )
 }

@@ -12,26 +12,34 @@ type ThemeMode = "light" | "dark";
 
 interface ThemeContextValue {
   theme: ThemeMode;
+  mounted: boolean;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") {
-      return "light";
-    }
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [mounted, setMounted] = useState(false);
 
-    const stored = window.localStorage.getItem("nihongotaku-theme");
-    if (stored === "dark" || stored === "light") {
-      return stored;
-    }
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem("nihongotaku-theme");
+      const nextTheme =
+        stored === "dark" || stored === "light"
+          ? stored
+          : window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
 
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  });
+      setTheme(nextTheme);
+      setMounted(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -41,10 +49,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       theme,
+      mounted,
       toggleTheme: () =>
         setTheme((current) => (current === "light" ? "dark" : "light")),
     }),
-    [theme],
+    [mounted, theme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

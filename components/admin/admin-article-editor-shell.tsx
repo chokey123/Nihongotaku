@@ -13,11 +13,15 @@ export function AdminArticleEditorShell({
   mode,
   articleId,
   locale,
+  scope = 'admin',
+  basePath = 'admin',
 }: {
   dict: Dictionary
   mode: 'create' | 'edit'
   articleId?: string
   locale: string
+  scope?: 'admin' | 'upload'
+  basePath?: 'admin' | 'upload'
 }) {
   const { user, isLoading } = useAuth()
   const copy = dict.status
@@ -27,7 +31,13 @@ export function AdminArticleEditorShell({
   )
 
   useEffect(() => {
-    if (mode !== 'edit' || !articleId || isLoading || user?.role !== 'admin') {
+    if (
+      mode !== 'edit' ||
+      !articleId ||
+      isLoading ||
+      !user ||
+      (scope === 'admin' && user.role !== 'admin')
+    ) {
       return
     }
 
@@ -38,6 +48,11 @@ export function AdminArticleEditorShell({
       .then((item) => {
         if (!isMounted) return
         if (!item) {
+          setStatus('not-found')
+          return
+        }
+
+        if (scope === 'upload' && user.role !== 'admin' && item.createdBy !== user.id) {
           setStatus('not-found')
           return
         }
@@ -53,7 +68,7 @@ export function AdminArticleEditorShell({
     return () => {
       isMounted = false
     }
-  }, [articleId, isLoading, mode, user?.role])
+  }, [articleId, isLoading, mode, scope, user])
 
   if (isLoading || status === 'loading') {
     return (
@@ -85,6 +100,8 @@ export function AdminArticleEditorShell({
       initialArticle={article}
       mode={mode}
       locale={locale}
+      basePath={basePath}
+      canPublish={user?.role === 'admin'}
     />
   )
 }

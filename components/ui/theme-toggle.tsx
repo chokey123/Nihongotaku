@@ -3,7 +3,7 @@
 import { useTheme } from "@/components/providers/theme-provider";
 
 export function ThemeToggle({ label }: { label: string }) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, mounted, toggleTheme } = useTheme();
 
   return (
     <button
@@ -13,7 +13,20 @@ export function ThemeToggle({ label }: { label: string }) {
       title={label}
       className="inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground transition hover:bg-brand-soft hover:text-brand-strong"
     >
-      {theme === "light" ? (
+      {!mounted ? (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="4.5" />
+        </svg>
+      ) : theme === "light" ? (
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
