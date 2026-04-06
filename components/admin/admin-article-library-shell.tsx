@@ -9,6 +9,8 @@ import type { ArticleItem } from '@/lib/types'
 
 export function AdminArticleLibraryShell({
   locale,
+  basePath = 'admin',
+  scope = 'admin',
   searchPlaceholder,
   loadingLabel,
   errorLabel,
@@ -17,6 +19,8 @@ export function AdminArticleLibraryShell({
   draftLabel,
 }: {
   locale: string
+  basePath?: 'admin' | 'upload'
+  scope?: 'admin' | 'upload'
   searchPlaceholder: string
   loadingLabel: string
   errorLabel: string
@@ -29,14 +33,20 @@ export function AdminArticleLibraryShell({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
-    if (isLoading || user?.role !== 'admin') {
+    if (isLoading || !user || (scope === 'admin' && user.role !== 'admin')) {
       return
     }
 
     let isMounted = true
 
-    backendService
-      .searchAdminArticles()
+    const loadItems =
+      scope === 'admin'
+        ? backendService.searchAdminArticles()
+        : backendService.searchArticleUploads(
+            user.role === 'admin' ? undefined : user.id,
+          )
+
+    loadItems
       .then((nextItems) => {
         if (!isMounted) return
         setItems(nextItems)
@@ -50,7 +60,7 @@ export function AdminArticleLibraryShell({
     return () => {
       isMounted = false
     }
-  }, [isLoading, user?.role])
+  }, [isLoading, scope, user])
 
   if (isLoading || status === 'loading') {
     return (
@@ -72,6 +82,7 @@ export function AdminArticleLibraryShell({
     <AdminArticleLibrary
       items={items}
       locale={locale}
+      basePath={basePath}
       searchPlaceholder={searchPlaceholder}
       newLabel={newLabel}
       publishedLabel={publishedLabel}

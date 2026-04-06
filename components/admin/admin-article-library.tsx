@@ -8,6 +8,7 @@ import type { ArticleItem } from '@/lib/types'
 export function AdminArticleLibrary({
   items,
   locale,
+  basePath = 'admin',
   searchPlaceholder,
   newLabel,
   publishedLabel,
@@ -15,6 +16,7 @@ export function AdminArticleLibrary({
 }: {
   items: ArticleItem[]
   locale: string
+  basePath?: 'admin' | 'upload'
   searchPlaceholder: string
   newLabel: string
   publishedLabel: string
@@ -43,7 +45,7 @@ export function AdminArticleLibrary({
           className="w-full max-w-2xl rounded-full border border-border bg-surface px-5 py-3 text-sm outline-none transition focus:border-brand"
         />
         <Link
-          href={`/${locale}/admin/article/new`}
+          href={`/${locale}/${basePath}/article/new`}
           className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white"
         >
           {newLabel}
@@ -54,7 +56,7 @@ export function AdminArticleLibrary({
         {filteredItems.map((item) => (
           <Link
             key={item.id}
-            href={`/${locale}/admin/article/${item.id}`}
+            href={`/${locale}/${basePath}/article/${item.id}`}
             className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
           >
             <div className="relative h-48 overflow-hidden">

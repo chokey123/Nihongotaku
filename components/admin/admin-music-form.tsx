@@ -79,6 +79,8 @@ interface KuromojiTokenizer {
   tokenize: (text: string) => KuromojiToken[]
 }
 
+type LrcUploadLocale = 'ja' | 'zh' | 'en'
+
 interface VocabContextMenuState {
   lineId: string
   selectedText: string
@@ -190,6 +192,81 @@ const adminMusicUiLabels: Record<
   },
 }
 
+const adminMusicFlowLabels: Record<
+  Locale,
+  {
+    uploadSectionTitle: string
+    uploadSectionHint: string
+    uploadLockedHint: string
+    saveDraftFirst: string
+    preview: string
+    publishFromPreview: string
+    fileTooLarge: string
+    tooManyLines: string
+    invalidLrc: string
+    uploadJapaneseFirst: string
+    timelineMismatch: string
+    metadataRequired: string
+    lrcImported: string
+  }
+> = {
+  zh: {
+    uploadSectionTitle: 'LRC 匯入',
+    uploadSectionHint: '請在這裡分別上傳日文、中文與英文 LRC。',
+    uploadLockedHint:
+      '請先填完網址、歌手、標題、曲風，並先儲存草稿，之後才會開放 LRC 上傳。',
+    saveDraftFirst: '請先儲存草稿',
+    preview: '預覽',
+    publishFromPreview: '從預覽發佈',
+    fileTooLarge: 'LRC 檔案不可超過 100KB。',
+    tooManyLines: 'LRC 行數不可超過 300 行。',
+    invalidLrc: 'LRC 格式不正確，無法解析。',
+    uploadJapaneseFirst: '請先上傳日文原文 LRC。',
+    timelineMismatch: '翻譯 LRC 的時間軸必須與日文原文完全一致。',
+    metadataRequired: '請先填寫網址、歌手、標題與曲風。',
+    lrcImported: 'LRC 已匯入。',
+  },
+  en: {
+    uploadSectionTitle: 'LRC Import',
+    uploadSectionHint: 'Upload Japanese, Chinese, and English LRC files here.',
+    uploadLockedHint:
+      'Fill in URL, artist, title, and genre, then save a draft first to unlock LRC upload.',
+    saveDraftFirst: 'Save the draft first.',
+    preview: 'Preview',
+    publishFromPreview: 'Publish from preview',
+    fileTooLarge: 'LRC files must be 100KB or smaller.',
+    tooManyLines: 'LRC files cannot exceed 300 lines.',
+    invalidLrc: 'Invalid LRC format. The file was not parsed.',
+    uploadJapaneseFirst: 'Upload the Japanese LRC first.',
+    timelineMismatch:
+      'Translation LRC timestamps must exactly match the Japanese lyrics.',
+    metadataRequired: 'Please fill in URL, artist, title, and genre first.',
+    lrcImported: 'LRC imported.',
+  },
+  ja: {
+    uploadSectionTitle: 'LRC 取り込み',
+    uploadSectionHint:
+      'ここで日本語・中国語・英語の LRC をそれぞれアップロードします。',
+    uploadLockedHint:
+      'URL、アーティスト、タイトル、ジャンルを入力して下書きを保存すると、LRC アップロードが使えるようになります。',
+    saveDraftFirst: '先に下書きを保存してください。',
+    preview: 'プレビュー',
+    publishFromPreview: 'プレビューから公開',
+    fileTooLarge: 'LRC ファイルは 100KB 以下にしてください。',
+    tooManyLines: 'LRC は 300 行以内にしてください。',
+    invalidLrc: 'LRC の形式が正しくないため解析できませんでした。',
+    uploadJapaneseFirst: '先に日本語の LRC をアップロードしてください。',
+    timelineMismatch:
+      '翻訳 LRC のタイムラインは日本語歌詞と完全一致している必要があります。',
+    metadataRequired:
+      '先に URL、アーティスト、タイトル、ジャンルを入力してください。',
+    lrcImported: 'LRC を取り込みました。',
+  },
+}
+
+const lrcLinePattern = /^\[(\d{2}):(\d{2})(?:\.(\d{2}))?\](.*)$/
+const lrcMetadataPattern = /^\[[A-Za-z]+:[^\]]*\]$/
+
 function emptyLocalizedText(): LocalizedText {
   return {
     zh: '',
@@ -240,7 +317,7 @@ function parseLrcRows(content: string) {
     .reduce<
       Array<{ atMs: number; timeLabel: string; text: string }>
     >((lines, row) => {
-      const matched = row.match(/\[(\d{2}):(\d{2})(?:\.(\d{2}))?\](.*)/)
+      const matched = row.match(lrcLinePattern)
       if (!matched) return lines
 
       const [, mm, ss, cs = '00', lyric] = matched
@@ -255,6 +332,48 @@ function parseLrcRows(content: string) {
 
       return lines
     }, [])
+}
+
+function validateLrcContent(content: string) {
+  const nonEmptyLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (nonEmptyLines.length === 0 || nonEmptyLines.length > 300) {
+    return {
+      ok: false,
+      reason: nonEmptyLines.length === 0 ? 'invalid' : 'tooManyLines',
+      rows: [],
+    } as const
+  }
+
+  const hasInvalidLine = nonEmptyLines.some(
+    (line) => !lrcLinePattern.test(line) && !lrcMetadataPattern.test(line),
+  )
+
+  if (hasInvalidLine) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      rows: [],
+    } as const
+  }
+
+  const rows = parseLrcRows(content)
+
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      rows: [],
+    } as const
+  }
+
+  return {
+    ok: true,
+    rows,
+  } as const
 }
 
 function extractYoutubeIdFromUrl(value: string) {
@@ -342,11 +461,15 @@ export function AdminMusicForm({
   initialMusic,
   mode,
   initialLocale = 'zh',
+  basePath = 'admin',
+  canPublish = true,
 }: {
   dict: Dictionary
   initialMusic?: MusicItem
   mode: 'create' | 'edit'
   initialLocale?: Locale
+  basePath?: 'admin' | 'upload'
+  canPublish?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -379,11 +502,45 @@ export function AdminMusicForm({
   const [title, setTitle] = useState(initialMusic?.title ?? '')
   const [artist, setArtist] = useState(initialMusic?.artist ?? '')
   const [genre, setGenre] = useState(initialMusic?.genre ?? '')
+  const [reviewRequestedAt, setReviewRequestedAt] = useState<string | null>(
+    initialMusic?.reviewRequestedAt ?? null,
+  )
   const labels = localizedFieldLabels[translationLocale]
   const uiLabels = adminMusicUiLabels[translationLocale]
+  const flowLabels = adminMusicFlowLabels[initialLocale]
   const publishLabels = publishActionLabels[initialLocale]
   const youtubeIdPreview = extractYoutubeIdFromUrl(sourceUrl)
   const youtubeThumbnailUrl = useYoutubeThumbnail(youtubeIdPreview)
+  const isUploadFlow = basePath === 'upload'
+  const canRequestReview = isUploadFlow && !canPublish && mode === 'edit'
+  const createdAt = initialMusic?.createdAt ?? null
+  const priorityDeadline = createdAt
+    ? new Date(new Date(createdAt).getTime() + 7 * 24 * 60 * 60 * 1000)
+    : null
+  const isPriorityExpired = priorityDeadline
+    ? priorityDeadline.getTime() < Date.now()
+    : false
+  const hasRequiredMetadata = [sourceUrl, title, artist, genre].every(
+    (value) => value.trim().length > 0,
+  )
+  const lrcUploadUnlocked = mode === 'edit' && hasRequiredMetadata
+  const canPreview =
+    mode === 'edit' &&
+    Boolean(initialMusic?.id) &&
+    lyrics.length > 0 &&
+    lyrics.every(
+      (line) =>
+        line.japanese.trim().length > 0 &&
+        Object.values(line.translation).some((value) => value?.trim().length),
+    )
+  const isContentComplete =
+    lyrics.length > 0 &&
+    lyrics.every(
+      (line) =>
+        line.japanese.trim().length > 0 &&
+        Object.values(line.translation).some((value) => value?.trim().length),
+    ) &&
+    vocabs.length > 5
   const areAllCollapsed =
     lyrics.length > 0 && collapsedLineIds.length === lyrics.length
   const tokenizerRef = useRef<KuromojiTokenizer | null>(null)
@@ -394,6 +551,77 @@ export function AdminMusicForm({
     lyrics.map((line) => line.id).join('|'),
   )
   const addVocabButtonPointerDownRef = useRef(false)
+
+  const applyLrcUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    locale: LrcUploadLocale,
+  ) => {
+    const resetInput = () => {
+      event.target.value = ''
+    }
+
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!lrcUploadUnlocked) {
+      setStatus(flowLabels.saveDraftFirst)
+      resetInput()
+      return
+    }
+
+    if (file.size > 100 * 1024) {
+      setStatus(flowLabels.fileTooLarge)
+      resetInput()
+      return
+    }
+
+    const content = await file.text()
+    const validation = validateLrcContent(content)
+
+    if (!validation.ok) {
+      setStatus(
+        validation.reason === 'tooManyLines'
+          ? flowLabels.tooManyLines
+          : flowLabels.invalidLrc,
+      )
+      resetInput()
+      return
+    }
+
+    if (locale === 'ja') {
+      setLyrics(parseLrc(content))
+      setVocabs((current) =>
+        current.filter((entry) =>
+          validation.rows.some((row, index) => `lrc-${index}` === entry.lineId),
+        ),
+      )
+      setStatus(flowLabels.lrcImported)
+      resetInput()
+      return
+    }
+
+    if (lyrics.length === 0) {
+      setStatus(flowLabels.uploadJapaneseFirst)
+      resetInput()
+      return
+    }
+
+    const lyricTimeline = lyrics.map((line) => line.atMs)
+    const translationTimeline = validation.rows.map((row) => row.atMs)
+    const isExactTimelineMatch =
+      lyricTimeline.length === translationTimeline.length &&
+      lyricTimeline.every((atMs, index) => atMs === translationTimeline[index])
+
+    if (!isExactTimelineMatch) {
+      setStatus(flowLabels.timelineMismatch)
+      resetInput()
+      return
+    }
+
+    setLyrics((current) => mergeTranslationFromLrc(current, content, locale))
+    setStatus(flowLabels.lrcImported)
+    resetInput()
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -603,6 +831,11 @@ export function AdminMusicForm({
     nextPublished: boolean,
     action: 'draft' | 'publish' | 'unpublish',
   ) => {
+    if (!hasRequiredMetadata) {
+      setStatus(flowLabels.metadataRequired)
+      return
+    }
+
     const payload: MusicDraftPayload = {
       sourceUrl,
       title,
@@ -610,6 +843,7 @@ export function AdminMusicForm({
       genre,
       lyrics,
       vocab: vocabs,
+      reviewRequestedAt,
     }
 
     setSubmitAction(action)
@@ -641,7 +875,7 @@ export function AdminMusicForm({
           router.replace(
             action === 'publish'
               ? `/${initialLocale}/music/${response.id}`
-              : `/${initialLocale}/admin/music/${response.id}`,
+              : `/${initialLocale}/${basePath}/music/${response.id}`,
           )
           return
         }
@@ -654,6 +888,62 @@ export function AdminMusicForm({
           `${publishLabels.saveFailed}: ${
             error instanceof Error ? error.message : 'Unknown error'
           }`,
+        )
+      } finally {
+        setSubmitAction(null)
+      }
+    })
+  }
+
+  const completeReview = () => {
+    if (!isContentComplete) {
+      setStatus(
+        initialLocale === 'en'
+          ? 'Please complete the lyrics and vocab content first.'
+          : initialLocale === 'ja'
+            ? '先に歌詞と単語の内容を完成させてください。'
+            : '請先完成歌詞與單字內容。',
+      )
+      return
+    }
+
+    const nextReviewRequestedAt = new Date().toISOString()
+    setReviewRequestedAt(nextReviewRequestedAt)
+    setSubmitAction('draft')
+    startTransition(async () => {
+      try {
+        const payload: MusicDraftPayload = {
+          sourceUrl,
+          title,
+          artist,
+          genre,
+          lyrics,
+          vocab: vocabs,
+          reviewRequestedAt: nextReviewRequestedAt,
+        }
+
+        const response =
+          mode === 'create'
+            ? await backendService.createMusic(payload, { isPublished: false })
+            : await backendService.updateMusic(
+                initialMusic?.id ?? 'unknown',
+                payload,
+                {
+                  isPublished: false,
+                },
+              )
+
+        setReviewRequestedAt(nextReviewRequestedAt)
+        setStatus(
+          initialLocale === 'en'
+            ? `Marked complete · ${response.id}`
+            : initialLocale === 'ja'
+              ? `完成として送信しました · ${response.id}`
+              : `已標記完成 · ${response.id}`,
+        )
+      } catch (error) {
+        setStatus(
+          error instanceof Error ? error.message : publishLabels.saveFailed,
         )
       } finally {
         setSubmitAction(null)
@@ -695,58 +985,71 @@ export function AdminMusicForm({
         </span>
       </div>
 
+      {/* {isUploadFlow ? (
+        <div className="mb-6 rounded-[28px] border border-border bg-surface p-5 text-sm text-muted">
+          <div className="space-y-2">
+            <p>
+              {initialLocale === 'en'
+                ? '1. To ensure quality, every uploaded song must be reviewed by an administrator before publication.'
+                : initialLocale === 'ja'
+                  ? '1. 品質を保つため、投稿した楽曲は公開前に管理者の審査が必要です。'
+                  : '1. 為確保內容品質，歌曲需經管理員審核後才能發佈。'}
+            </p>
+            <p>
+              {initialLocale === 'en'
+                ? '2. After upload, you have a 7-day priority editing window. If the lyrics and vocab are still incomplete after that, an administrator may help complete and publish the content.'
+                : initialLocale === 'ja'
+                  ? '2. 投稿後 7 日間は投稿者が優先して編集できます。期間を過ぎても歌詞や単語が未完成の場合、管理者が補完して公開することがあります。'
+                  : '2. 上傳後你有 7 天優先編輯權；若超過期限且歌詞與單字仍未完善，管理員可能會協助完善並發佈。'}
+            </p>
+            <p>
+              {initialLocale === 'en'
+                ? '3. Once the lyrics and vocab are complete, click "Complete" to prioritize admin review and publication.'
+                : initialLocale === 'ja'
+                  ? '3. 歌詞と単語の內容が整ったら「完成」を押すと、管理者が優先して審査・公開します。'
+                  : '3. 當歌詞與單字內容完成後，可點擊「完成」，管理員會優先審核並發佈。'}
+            </p>
+            <p>
+              {initialLocale === 'en'
+                ? '4. After publication, regular users can no longer edit the song.'
+                : initialLocale === 'ja'
+                  ? '4. 公開後は一般ユーザーはこの楽曲を編集できません。'
+                  : '4. 發佈後的內容將不可再被修改。'}
+            </p>
+          </div>
+          {priorityDeadline && !isPublished ? (
+            <div className="mt-4 rounded-2xl border border-border bg-white px-4 py-3 text-xs font-medium text-foreground dark:bg-white">
+              {isPriorityExpired
+                ? initialLocale === 'en'
+                  ? 'The 7-day priority editing window has passed. If the content is still incomplete, an administrator may step in to finish it.'
+                  : initialLocale === 'ja'
+                    ? '7 日間の優先編集期間は終了しました。未完成の場合は管理者が補完することがあります。'
+                    : '7 天優先編輯期已過；若內容仍未完成，管理員可能會介入協助完善。'
+                : initialLocale === 'en'
+                  ? `Your priority editing window is open until ${priorityDeadline.toLocaleDateString()}.`
+                  : initialLocale === 'ja'
+                    ? `優先編集期間は ${priorityDeadline.toLocaleDateString()} までです。`
+                    : `你的優先編輯權將持續到 ${priorityDeadline.toLocaleDateString()}。`}
+            </div>
+          ) : null}
+          {reviewRequestedAt ? (
+            <div className="mt-3 rounded-2xl border border-border bg-brand-soft px-4 py-3 text-xs font-semibold text-brand-strong">
+              {initialLocale === 'en'
+                ? 'This song has been marked complete and is waiting for admin review.'
+                : initialLocale === 'ja'
+                  ? 'この楽曲は完成として送信済みで、管理者レビュー待ちです。'
+                  : '這首歌已標記為完成，正在等待管理員審核。'}
+            </div>
+          ) : null}
+        </div>
+      ) : null} */}
+
       <div className="grid gap-4 md:grid-cols-2">
         <FormField label={dict.labels.sourceUrl}>
           <input
             value={sourceUrl}
             onChange={(event) => setSourceUrl(event.target.value)}
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
-          />
-        </FormField>
-        <FormField label={`${dict.labels.lrcUpload} (JA)`}>
-          <input
-            type="file"
-            accept=".lrc,.txt"
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
-            onChange={async (event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              const content = await file.text()
-              setLyrics(parseLrc(content))
-              event.target.value = ''
-            }}
-          />
-        </FormField>
-        <FormField label={`${dict.labels.lrcUpload} (ZH)`}>
-          <input
-            type="file"
-            accept=".lrc,.txt"
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
-            onChange={async (event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              const content = await file.text()
-              setLyrics((current) =>
-                mergeTranslationFromLrc(current, content, 'zh'),
-              )
-              event.target.value = ''
-            }}
-          />
-        </FormField>
-        <FormField label={`${dict.labels.lrcUpload} (EN)`}>
-          <input
-            type="file"
-            accept=".lrc,.txt"
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
-            onChange={async (event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              const content = await file.text()
-              setLyrics((current) =>
-                mergeTranslationFromLrc(current, content, 'en'),
-              )
-              event.target.value = ''
-            }}
           />
         </FormField>
         <FormField label={dict.labels.title}>
@@ -770,6 +1073,61 @@ export function AdminMusicForm({
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
         </FormField>
+      </div>
+
+      <div className="mt-6 rounded-[28px] border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-heading text-lg font-bold">
+              {flowLabels.uploadSectionTitle}
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              {lrcUploadUnlocked
+                ? flowLabels.uploadSectionHint
+                : flowLabels.uploadLockedHint}
+            </p>
+          </div>
+          {!lrcUploadUnlocked ? (
+            <span className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-muted dark:bg-white">
+              {flowLabels.saveDraftFirst}
+            </span>
+          ) : null}
+        </div>
+
+        {lrcUploadUnlocked ? (
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <FormField label={`${dict.labels.lrcUpload} (JA)`}>
+              <input
+                type="file"
+                accept=".lrc,.txt"
+                className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
+                onChange={(event) => {
+                  void applyLrcUpload(event, 'ja')
+                }}
+              />
+            </FormField>
+            <FormField label={`${dict.labels.lrcUpload} (ZH)`}>
+              <input
+                type="file"
+                accept=".lrc,.txt"
+                className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
+                onChange={(event) => {
+                  void applyLrcUpload(event, 'zh')
+                }}
+              />
+            </FormField>
+            <FormField label={`${dict.labels.lrcUpload} (EN)`}>
+              <input
+                type="file"
+                accept=".lrc,.txt"
+                className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-brand-soft file:px-3 file:py-1.5"
+                onChange={(event) => {
+                  void applyLrcUpload(event, 'en')
+                }}
+              />
+            </FormField>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-4">
@@ -1162,20 +1520,49 @@ export function AdminMusicForm({
             ? '...'
             : dict.labels.saveDraft}
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            persistMusic(!isPublished, isPublished ? 'unpublish' : 'publish')
-          }
-          disabled={isPending}
-          className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
-        >
-          {isPending && submitAction !== 'draft'
-            ? '...'
-            : isPublished
-              ? publishLabels.unpublish
-              : publishLabels.publish}
-        </button>
+        {canPreview && initialMusic?.id ? (
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/${initialLocale}/music/preview/${initialMusic.id}`)
+            }
+            className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand"
+          >
+            {flowLabels.preview}
+          </button>
+        ) : null}
+        {canRequestReview && !isPublished ? (
+          <button
+            type="button"
+            onClick={completeReview}
+            disabled={isPending}
+            className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+          >
+            {isPending && submitAction === 'draft'
+              ? '...'
+              : initialLocale === 'en'
+                ? 'Complete'
+                : initialLocale === 'ja'
+                  ? '完成'
+                  : '完成'}
+          </button>
+        ) : null}
+        {canPublish ? (
+          <button
+            type="button"
+            onClick={() =>
+              persistMusic(!isPublished, isPublished ? 'unpublish' : 'publish')
+            }
+            disabled={isPending}
+            className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
+          >
+            {isPending && submitAction !== 'draft'
+              ? '...'
+              : isPublished
+                ? publishLabels.unpublish
+                : publishLabels.publish}
+          </button>
+        ) : null}
         {status ? (
           <span className="rounded-full bg-brand-soft px-4 py-2 text-sm text-brand-strong">
             {status}

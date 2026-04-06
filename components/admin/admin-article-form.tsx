@@ -68,11 +68,15 @@ export function AdminArticleForm({
   initialArticle,
   mode,
   locale,
+  basePath = "admin",
+  canPublish = true,
 }: {
   dict: Dictionary;
   initialArticle?: ArticleItem;
   mode: "create" | "edit";
   locale: string;
+  basePath?: "admin" | "upload";
+  canPublish?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -122,7 +126,7 @@ export function AdminArticleForm({
           router.replace(
             action === "publish"
               ? `/${locale}/article/${response.id}`
-              : `/${locale}/admin/article/${response.id}`,
+              : `/${locale}/${basePath}/article/${response.id}`,
           );
           return;
         }
@@ -207,20 +211,22 @@ export function AdminArticleForm({
         >
           {isPending && submitAction === "draft" ? "..." : dict.labels.saveDraft}
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            persistArticle(!isPublished, isPublished ? "unpublish" : "publish")
-          }
-          disabled={isPending}
-          className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
-        >
-          {isPending && submitAction !== "draft"
-            ? "..."
-            : isPublished
-              ? actionLabels.unpublish
-              : actionLabels.publish}
-        </button>
+        {canPublish ? (
+          <button
+            type="button"
+            onClick={() =>
+              persistArticle(!isPublished, isPublished ? "unpublish" : "publish")
+            }
+            disabled={isPending}
+            className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
+          >
+            {isPending && submitAction !== "draft"
+              ? "..."
+              : isPublished
+                ? actionLabels.unpublish
+                : actionLabels.publish}
+          </button>
+        ) : null}
         {status ? <span className="rounded-full bg-brand-soft px-4 py-2 text-sm text-brand-strong">{status}</span> : null}
       </div>
     </div>

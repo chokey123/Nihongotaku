@@ -20,10 +20,12 @@ export function AdminMusicQuizShell({
   musicId,
   locale,
   dict,
+  scope = 'admin',
 }: {
   musicId: string
   locale: Locale
   dict: Dictionary
+  scope?: 'admin' | 'upload'
 }) {
   const { user, isLoading } = useAuth()
   const copy = dict.status
@@ -35,7 +37,7 @@ export function AdminMusicQuizShell({
   )
 
   useEffect(() => {
-    if (isLoading || user?.role !== 'admin') {
+    if (isLoading || !user || (scope === 'admin' && user.role !== 'admin')) {
       return
     }
 
@@ -46,6 +48,15 @@ export function AdminMusicQuizShell({
       .then((selection) => {
         if (!isMounted) return
         if (!selection) {
+          setStatus('not-found')
+          return
+        }
+
+        if (
+          scope === 'upload' &&
+          user.role !== 'admin' &&
+          selection.music.createdBy !== user.id
+        ) {
           setStatus('not-found')
           return
         }
@@ -63,7 +74,7 @@ export function AdminMusicQuizShell({
     return () => {
       isMounted = false
     }
-  }, [isLoading, musicId, user?.role])
+  }, [isLoading, musicId, scope, user])
 
   if (isLoading || status === 'loading') {
     return (

@@ -1,34 +1,76 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 import type { MusicItem } from '@/lib/types'
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
+import { backendService } from '@/lib/services/backend-service'
 
 function AdminMusicLibraryCard({
   item,
   href,
   mode,
+  locale,
   quizLabel,
   publishedLabel,
   draftLabel,
+  showDeleteButton,
+  deleteLabel,
+  onDelete,
 }: {
   item: MusicItem
   href: string
   mode: 'music' | 'quiz'
+  locale: string
   quizLabel: string
   publishedLabel: string
   draftLabel: string
+  showDeleteButton?: boolean
+  deleteLabel?: string
+  onDelete?: (item: MusicItem) => Promise<void>
 }) {
   const thumbnailUrl = useYoutubeThumbnail(item.youtubeId)
 
+  const sourceLabel =
+    item.creatorRole === 'admin'
+      ? locale === 'en'
+        ? 'Admin created'
+        : locale === 'ja'
+          ? '管理者作成'
+          : '管理員建立'
+      : item.submissionSource === 'wish'
+        ? locale === 'en'
+          ? 'From wish'
+          : locale === 'ja'
+            ? '祈願から'
+            : '來自許願'
+        : locale === 'en'
+          ? 'User upload'
+          : locale === 'ja'
+            ? 'ユーザー投稿'
+            : '使用者上傳'
+
   return (
-    <Link
-      href={href}
-      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
-    >
+    <div className="glass-panel group relative flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand">
+      {showDeleteButton && onDelete ? (
+        <div className="pointer-events-none absolute z-10 p-3">
+          <button
+            type="button"
+            onClick={() => {
+              void onDelete(item)
+            }}
+            aria-label={deleteLabel}
+            title={deleteLabel}
+            className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center text-[2rem] font-semibold leading-none text-red-500/75 transition hover:scale-105 hover:text-red-600 disabled:opacity-50 dark:text-red-300/80 dark:hover:text-red-200"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      <Link href={href} className="flex flex-col overflow-hidden">
       <div className="relative h-48 overflow-hidden">
         {thumbnailUrl ? (
           <>
@@ -75,8 +117,14 @@ function AdminMusicLibraryCard({
             {item.genre}
           </span>
         </div>
+        {mode === 'music' ? (
+          <div className="space-y-1.5 text-xs">
+            <p className="font-semibold text-muted">{sourceLabel}</p>
+          </div>
+        ) : null}
       </div>
-    </Link>
+      </Link>
+    </div>
   )
 }
 
@@ -84,33 +132,57 @@ export function AdminMusicLibrary({
   items,
   locale,
   mode,
+  basePath = 'admin',
   searchPlaceholder,
   newLabel,
   publishedLabel,
   draftLabel,
   quizLabel,
+  allowDelete = false,
+  deleteLabel = 'Delete',
+  deleteConfirmTitle = 'Confirm delete?',
+  deleteConfirmDescription = 'Only unpublished music can be deleted.',
+  cancelLabel = 'Cancel',
+  confirmDeleteLabel = 'Delete',
 }: {
   items: MusicItem[]
   locale: string
   mode: 'music' | 'quiz'
+  basePath?: 'admin' | 'upload'
   searchPlaceholder: string
   newLabel: string
   publishedLabel: string
   draftLabel: string
   quizLabel: string
+  allowDelete?: boolean
+  deleteLabel?: string
+  deleteConfirmTitle?: string
+  deleteConfirmDescription?: string
+  cancelLabel?: string
+  confirmDeleteLabel?: string
 }) {
+  const router = useRouter()
   const [query, setQuery] = useState('')
+  const [showUploadNotice, setShowUploadNotice] = useState(false)
+  const [itemsState, setItemsState] = useState(items)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<MusicItem | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  useEffect(() => {
+    setItemsState(items)
+  }, [items])
 
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    if (!keyword) return items
+    if (!keyword) return itemsState
 
-    return items.filter((item) =>
+    return itemsState.filter((item) =>
       [item.title, item.artist, item.genre].some((value) =>
         value.toLowerCase().includes(keyword),
       ),
     )
-  }, [items, query])
+  }, [itemsState, query])
 
   return (
     <div className="space-y-6">
@@ -122,12 +194,20 @@ export function AdminMusicLibrary({
           className="w-full max-w-2xl rounded-full border border-border bg-surface px-5 py-3 text-sm outline-none transition focus:border-brand"
         />
         {mode === 'music' ? (
-          <Link
-            href={`/${locale}/admin/music/new`}
+          <button
+            type="button"
+            onClick={() => {
+              if (basePath === 'upload') {
+                setShowUploadNotice(true)
+                return
+              }
+
+              router.push(`/${locale}/${basePath}/music/new`)
+            }}
             className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white"
           >
             {newLabel}
-          </Link>
+          </button>
         ) : null}
       </div>
 
@@ -135,8 +215,8 @@ export function AdminMusicLibrary({
         {filteredItems.map((item) => {
           const href =
             mode === 'music'
-              ? `/${locale}/admin/music/${item.id}`
-              : `/${locale}/admin/music/quiz/${item.id}`
+              ? `/${locale}/${basePath}/music/${item.id}`
+              : `/${locale}/${basePath}/music/quiz/${item.id}`
 
           return (
             <AdminMusicLibraryCard
@@ -144,13 +224,166 @@ export function AdminMusicLibrary({
               item={item}
               href={href}
               mode={mode}
+              locale={locale}
               quizLabel={quizLabel}
               publishedLabel={publishedLabel}
               draftLabel={draftLabel}
+              showDeleteButton={allowDelete && mode === 'music' && !item.isPublished}
+              deleteLabel={deleteLabel}
+              onDelete={async (target) => {
+                setPendingDeleteItem(target)
+              }}
             />
           )
         })}
       </div>
+      {statusMessage ? (
+        <div className="glass-panel rounded-[24px] border border-border px-4 py-3 text-sm text-muted">
+          {statusMessage}
+        </div>
+      ) : null}
+
+      {showUploadNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="glass-panel w-full max-w-2xl rounded-[32px] border border-border p-6">
+            <h2 className="font-heading text-2xl font-bold">
+              {locale === 'en'
+                ? 'Before you upload a song'
+                : locale === 'ja'
+                  ? '楽曲を投稿する前に'
+                  : '在你上傳歌曲之前'}
+            </h2>
+            <div className="mt-4 space-y-3 text-sm text-muted">
+              <p>
+                {locale === 'en'
+                  ? '1. To ensure quality, every upload must be reviewed by an administrator before it can be published.'
+                  : locale === 'ja'
+                    ? '1. 品質を保つため、すべての投稿は公開前に管理者の審査が必要です。'
+                    : '1. 為確保內容品質，所有投稿都需經管理員審核後才能發佈。'}
+              </p>
+              <p>
+                {locale === 'en'
+                  ? '2. After upload, you have a 7-day priority editing window. If the lyrics and vocab are still incomplete after that, an administrator may help finish and publish the content.'
+                  : locale === 'ja'
+                    ? '2. 投稿後 7 日間は投稿者が優先して編集できます。期間を過ぎても歌詞や単語が未完成の場合、管理者が補完して公開することがあります。'
+                    : '2. 歌曲上傳後，你有 7 天的優先編輯權；若超過期限且歌詞與單字內容仍未完善，管理員可能會協助完善並發佈。'}
+              </p>
+              <p>
+                {locale === 'en'
+                  ? '3. When the lyrics and vocab are ready, click "Complete" so administrators can prioritize review and publication.'
+                  : locale === 'ja'
+                    ? '3. 歌詞と単語の内容が整ったら「完成」を押してください。管理者が優先して審査・公開します。'
+                    : '3. 當你確認歌詞與單字內容完成後，可以點擊「完成」按鍵，管理員會優先審核並發佈。'}
+              </p>
+              <p>
+                {locale === 'en'
+                  ? '4. Published content can no longer be edited by regular users.'
+                  : locale === 'ja'
+                    ? '4. 公開後の内容は一般ユーザーは編集できません。'
+                    : '4. 發佈後的內容將不可再被修改。'}
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowUploadNotice(false)}
+                className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand"
+              >
+                {locale === 'en' ? 'Cancel' : locale === 'ja' ? '戻る' : '返回'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadNotice(false)
+                  router.push(`/${locale}/${basePath}/music/new`)
+                }}
+                className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white"
+              >
+                {locale === 'en'
+                  ? 'I understand'
+                  : locale === 'ja'
+                    ? '理解しました'
+                    : '我了解了'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {pendingDeleteItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="glass-panel w-full max-w-lg rounded-[32px] border border-border p-6">
+            <h2 className="font-heading text-2xl font-bold">
+              {deleteConfirmTitle}
+            </h2>
+            <p className="mt-3 text-sm text-muted">
+              {deleteConfirmDescription}
+            </p>
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {pendingDeleteItem.artist} - {pendingDeleteItem.title}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteItem(null)}
+                disabled={isDeleting}
+                className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+              >
+                {cancelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!pendingDeleteItem) {
+                    return
+                  }
+
+                  setIsDeleting(true)
+
+                  void backendService
+                    .deleteMusic(pendingDeleteItem.id)
+                    .then(() => {
+                      setItemsState((current) =>
+                        current.filter((item) => item.id !== pendingDeleteItem.id),
+                      )
+                      setStatusMessage(
+                        locale === 'en'
+                          ? 'Music deleted.'
+                          : locale === 'ja'
+                            ? '楽曲を削除しました。'
+                            : '歌曲已刪除。',
+                      )
+                      setPendingDeleteItem(null)
+                    })
+                    .catch((error) => {
+                      setStatusMessage(
+                        error instanceof Error
+                          ? error.message
+                          : locale === 'en'
+                            ? 'Delete failed.'
+                            : locale === 'ja'
+                              ? '削除に失敗しました。'
+                              : '刪除失敗。',
+                      )
+                    })
+                    .finally(() => {
+                      setIsDeleting(false)
+                    })
+                }}
+                disabled={isDeleting}
+                className="rounded-full border border-red-300 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100 disabled:opacity-70 dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+              >
+                {isDeleting
+                  ? locale === 'en'
+                    ? 'Deleting...'
+                    : locale === 'ja'
+                      ? '削除中...'
+                      : '刪除中...'
+                  : confirmDeleteLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

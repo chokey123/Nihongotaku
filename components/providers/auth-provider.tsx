@@ -26,6 +26,21 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function getEmailRedirectTo() {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configuredUrl) {
+    return `${configuredUrl.replace(/\/$/, "")}/zh/home`;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/zh/home`;
+  }
+
+  return undefined;
+}
+
 async function ensureUserProfile(user: {
   id: string;
   email?: string;
@@ -147,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       },
       signUp: async (email: string, password: string, displayName: string) => {
+        const emailRedirectTo = getEmailRedirectTo();
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -154,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             data: {
               display_name: displayName,
             },
+            ...(emailRedirectTo ? { emailRedirectTo } : {}),
           },
         });
 
