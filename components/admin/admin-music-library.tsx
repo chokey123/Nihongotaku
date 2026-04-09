@@ -162,7 +162,15 @@ export function AdminMusicLibrary({
   confirmDeleteLabel?: string
 }) {
   const router = useRouter()
+  const [draftQuery, setDraftQuery] = useState('')
   const [query, setQuery] = useState('')
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
+  const [selectedSource, setSelectedSource] = useState<
+    'all' | 'wish' | 'upload' | 'admin'
+  >('all')
+  const [selectedPublishState, setSelectedPublishState] = useState<
+    'all' | 'published' | 'draft'
+  >('all')
   const [showUploadNotice, setShowUploadNotice] = useState(false)
   const [itemsState, setItemsState] = useState(items)
   const [statusMessage, setStatusMessage] = useState('')
@@ -173,26 +181,176 @@ export function AdminMusicLibrary({
     setItemsState(items)
   }, [items])
 
+  const suggestions = useMemo(() => {
+    const keyword = draftQuery.trim().toLowerCase()
+    if (!keyword) {
+      return []
+    }
+
+    const unique = new Map<string, { label: string; type: 'artist' | 'song' }>()
+
+    for (const item of itemsState) {
+      if (
+        item.artist.toLowerCase().includes(keyword) &&
+        !unique.has(`artist:${item.artist}`)
+      ) {
+        unique.set(`artist:${item.artist}`, {
+          label: item.artist,
+          type: 'artist',
+        })
+      }
+
+      if (
+        item.title.toLowerCase().includes(keyword) &&
+        !unique.has(`song:${item.title}`)
+      ) {
+        unique.set(`song:${item.title}`, {
+          label: item.title,
+          type: 'song',
+        })
+      }
+
+      if (unique.size >= 8) {
+        break
+      }
+    }
+
+    return [...unique.values()]
+  }, [draftQuery, itemsState])
+
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    if (!keyword) return itemsState
-
     return itemsState.filter((item) =>
       [item.title, item.artist, item.genre].some((value) =>
         value.toLowerCase().includes(keyword),
       ),
     )
-  }, [itemsState, query])
+      .filter((item) => {
+        if (selectedSource === 'all') {
+          return true
+        }
+
+        if (selectedSource === 'admin') {
+          return item.creatorRole === 'admin'
+        }
+
+        return item.submissionSource === selectedSource
+      })
+      .filter((item) => {
+        if (selectedPublishState === 'all') {
+          return true
+        }
+
+        return selectedPublishState === 'published'
+          ? Boolean(item.isPublished)
+          : !item.isPublished
+      })
+      .filter((item) => {
+        if (!keyword) {
+          return true
+        }
+
+        return [item.title, item.artist, item.genre].some((value) =>
+          value.toLowerCase().includes(keyword),
+        )
+      })
+  }, [itemsState, query, selectedPublishState, selectedSource])
+
+  const sourceFilterLabel =
+    locale === 'en' ? 'Source filter' : locale === 'ja' ? '作成元絞り込み' : '來源篩選'
+  const publishFilterLabel =
+    locale === 'en' ? 'Status filter' : locale === 'ja' ? '公開状態絞り込み' : '狀態篩選'
+  const clearFiltersLabel =
+    locale === 'en' ? 'Clear filters' : locale === 'ja' ? '絞り込み解除' : '清除篩選'
+  const suggestionArtistLabel =
+    locale === 'en' ? 'Artist' : locale === 'ja' ? 'ã‚¢ãƒ¼ãƒ†ã‚£ã‚¹ãƒˆ' : 'æ­Œæ‰‹'
+  const suggestionSongLabel =
+    locale === 'en' ? 'Song' : locale === 'ja' ? 'æ¥½æ›²' : 'æ­Œæ›²'
+  const sourceOptions = [
+    {
+      key: 'wish' as const,
+      label: locale === 'en' ? 'Wish' : locale === 'ja' ? '祈願' : '許願',
+    },
+    {
+      key: 'upload' as const,
+      label:
+        locale === 'en' ? 'User upload' : locale === 'ja' ? 'ユーザー投稿' : '使用者上傳',
+    },
+    {
+      key: 'admin' as const,
+      label:
+        locale === 'en' ? 'Admin created' : locale === 'ja' ? '管理者建立' : '管理員建立',
+    },
+  ]
+  const publishOptions = [
+    {
+      key: 'published' as const,
+      label: publishedLabel,
+    },
+    {
+      key: 'draft' as const,
+      label: draftLabel,
+    },
+  ]
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={searchPlaceholder}
-          className="w-full max-w-2xl rounded-full border border-border bg-surface px-5 py-3 text-sm outline-none transition focus:border-brand"
-        />
+        <div className="relative w-full max-w-2xl">
+          <form
+            className="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setQuery(draftQuery)
+              setIsSuggestionOpen(false)
+            }}
+          >
+            <input
+              value={draftQuery}
+              onChange={(event) => {
+                setDraftQuery(event.target.value)
+                setIsSuggestionOpen(true)
+              }}
+              placeholder={searchPlaceholder}
+              onFocus={() => {
+                if (suggestions.length > 0) {
+                  setIsSuggestionOpen(true)
+                }
+              }}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsSuggestionOpen(false)
+                }, 120)
+              }}
+              className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
+            />
+          </form>
+
+          {isSuggestionOpen && suggestions.length > 0 ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={`${suggestion.type}:${suggestion.label}`}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    setDraftQuery(suggestion.label)
+                    setQuery(suggestion.label)
+                    setIsSuggestionOpen(false)
+                  }}
+                  className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-left text-sm transition hover:bg-brand-soft/40 last:border-b-0"
+                >
+                  <span className="font-medium text-foreground">{suggestion.label}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                    {suggestion.type === 'artist'
+                      ? suggestionArtistLabel
+                      : suggestionSongLabel}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         {mode === 'music' ? (
           <button
             type="button"
@@ -210,6 +368,85 @@ export function AdminMusicLibrary({
           </button>
         ) : null}
       </div>
+
+      {mode === 'music' ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
+            <div className="pt-2 text-sm font-semibold text-muted">
+              {sourceFilterLabel}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {sourceOptions.map((option) => {
+                const isActive = selectedSource === option.key
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() =>
+                      setSelectedSource((current) =>
+                        current === option.key ? 'all' : option.key,
+                      )
+                    }
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? 'border-brand bg-brand-soft text-brand-strong'
+                        : 'border-border bg-surface text-muted hover:border-brand hover:text-brand-strong'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
+            <div className="pt-2 text-sm font-semibold text-muted">
+              {publishFilterLabel}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {publishOptions.map((option) => {
+                const isActive = selectedPublishState === option.key
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() =>
+                      setSelectedPublishState((current) =>
+                        current === option.key ? 'all' : option.key,
+                      )
+                    }
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? 'border-brand bg-brand-soft text-brand-strong'
+                        : 'border-border bg-surface text-muted hover:border-brand hover:text-brand-strong'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {(selectedSource !== 'all' || selectedPublishState !== 'all') ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSource('all')
+                  setSelectedPublishState('all')
+                }}
+                className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
+              >
+                {clearFiltersLabel}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filteredItems.map((item) => {

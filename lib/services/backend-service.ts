@@ -16,6 +16,7 @@ import type {
   MusicQuizQuestion,
   MusicSubmissionSource,
   MusicVocabItem,
+  VocabDifficulty,
   UserRole,
   WishPayload,
   WishRequestItem,
@@ -58,6 +59,7 @@ const MUSIC_SELECT = `
     word,
     basic_form,
     furigana,
+    difficulty,
     example_japanese,
     is_quiz_enabled,
     music_vocab_localization (
@@ -113,6 +115,7 @@ interface SupabaseVocabRow {
   word: string
   basic_form: string | null
   furigana: string | null
+  difficulty: VocabDifficulty | null
   example_japanese: string | null
   is_quiz_enabled: boolean | null
   music_vocab_localization?: SupabaseVocabLocalizationRow[] | null
@@ -162,6 +165,7 @@ interface SupabaseMusicDuplicateRow {
   artist: string
   youtube_video_id: string | null
   source_url: string | null
+  is_published: boolean | null
 }
 
 interface SupabaseMusicQuizAttemptAnswerRow {
@@ -200,6 +204,7 @@ function normalizeMusicItem(item: LegacyMusicItem): MusicItem {
     item.lyrics.flatMap((line) =>
       (line.vocab ?? []).map((entry, index) => ({
         ...entry,
+        difficulty: entry.difficulty ?? 'intermediate',
         id: `${line.id}-${index}`,
         lineId: line.id,
       })),
@@ -212,7 +217,10 @@ function normalizeMusicItem(item: LegacyMusicItem): MusicItem {
     submissionSource: item.submissionSource ?? 'upload',
     isPublished: item.isPublished ?? true,
     lyrics,
-    vocab,
+    vocab: vocab.map((entry) => ({
+      ...entry,
+      difficulty: entry.difficulty ?? 'intermediate',
+    })),
   }
 }
 
@@ -244,6 +252,24 @@ function flattenMusicVocabs(item: MusicItem) {
       lineJapanese: line?.japanese ?? '',
       vocab,
     }
+  })
+}
+
+function buildQuizVocabIdentity(vocab: Pick<MusicVocabItem, 'word'>) {
+  return vocab.word.trim().toLowerCase()
+}
+
+function buildAutoQuizVocabKeys(vocabEntries: MusicVocabItem[]) {
+  const seenIdentities = new Set<string>()
+
+  return vocabEntries.flatMap((entry) => {
+    const identity = buildQuizVocabIdentity(entry)
+    if (!identity || seenIdentities.has(identity)) {
+      return []
+    }
+
+    seenIdentities.add(identity)
+    return [entry.id]
   })
 }
 
@@ -382,6 +408,7 @@ function buildMusicItemFromSupabase(row: SupabaseMusicRow): MusicItem {
       lineId: entry.lyric_line_id ?? '',
       word: entry.word,
       furigana: entry.furigana ?? '',
+      difficulty: entry.difficulty ?? 'intermediate',
       meaning: localizeSupabaseText(
         entry.music_vocab_localization,
         (localization) => localization.meaning_text,
@@ -575,7 +602,7 @@ export class BackendService {
     if (hasSupabaseConfig) {
       const { data, error } = await supabase
         .from('music')
-        .select('id, title, artist, youtube_video_id, source_url')
+        .select('id, title, artist, youtube_video_id, source_url, is_published')
         .eq('youtube_video_id', youtubeId)
         .limit(5)
 
@@ -593,28 +620,33 @@ export class BackendService {
       }
     }
 
-    const fallbackDuplicate = normalizedMusicCatalog.find((item) => {
-      if (item.id === options?.excludeMusicId) {
-        return false
+    if (!hasSupabaseConfig) {
+      const fallbackDuplicate = normalizedMusicCatalog.find((item) => {
+        if (item.id === options?.excludeMusicId) {
+          return false
+        }
+
+        const existingSourceUrl =
+          item.sourceUrl ?? `https://youtube.com/watch?v=${item.youtubeId}`
+
+        return isSameMusicSourceUrl(existingSourceUrl, normalizedSourceUrl)
+      })
+
+      if (!fallbackDuplicate) {
+        return null
       }
 
-      const existingSourceUrl =
-        item.sourceUrl ?? `https://youtube.com/watch?v=${item.youtubeId}`
-
-      return isSameMusicSourceUrl(existingSourceUrl, normalizedSourceUrl)
-    })
-
-    if (!fallbackDuplicate) {
-      return null
+      return {
+        id: fallbackDuplicate.id,
+        title: fallbackDuplicate.title,
+        artist: fallbackDuplicate.artist,
+        youtube_video_id: fallbackDuplicate.youtubeId,
+        source_url: fallbackDuplicate.sourceUrl ?? null,
+        is_published: fallbackDuplicate.isPublished ?? true,
+      }
     }
 
-    return {
-      id: fallbackDuplicate.id,
-      title: fallbackDuplicate.title,
-      artist: fallbackDuplicate.artist,
-      youtube_video_id: fallbackDuplicate.youtubeId,
-      source_url: fallbackDuplicate.sourceUrl ?? null,
-    }
+    return null
   }
 
   private async assertMusicSourceUrlIsUnique(
@@ -626,7 +658,7 @@ export class BackendService {
       options,
     )
 
-    if (!duplicate) {
+    if (!duplicate || !duplicate.is_published) {
       return
     }
 
@@ -760,8 +792,12 @@ export class BackendService {
   ) {
     if (!hasSupabaseConfig) {
       await wait(280)
-      if (payload.quizVocabKeys) {
-        musicQuizSelections.set(id, [...payload.quizVocabKeys])
+      const fallbackQuizKeys = isPublished
+        ? buildAutoQuizVocabKeys(payload.vocab)
+        : payload.quizVocabKeys
+
+      if (fallbackQuizKeys) {
+        musicQuizSelections.set(id, [...fallbackQuizKeys])
       }
       return { ok: true, id, isPublished, payload }
     }
@@ -793,7 +829,7 @@ export class BackendService {
 
     const { data: existingMusic } = await supabase
       .from('music')
-      .select('id')
+      .select('id, is_published')
       .eq('id', id)
       .maybeSingle()
 
@@ -836,14 +872,23 @@ export class BackendService {
       }
     }
 
-    const { data: existingQuizRows } = await supabase
-      .from('music_vocab')
-      .select('id, is_quiz_enabled')
-      .eq('music_id', id)
+    const shouldAutoPopulateQuiz =
+      isPublished && (!existingMusic || existingMusic.is_published !== true)
 
-    for (const row of existingQuizRows ?? []) {
-      if (row.is_quiz_enabled) {
-        selectedQuizKeys.add(row.id)
+    if (shouldAutoPopulateQuiz) {
+      for (const key of buildAutoQuizVocabKeys(normalizedVocab)) {
+        selectedQuizKeys.add(key)
+      }
+    } else {
+      const { data: existingQuizRows } = await supabase
+        .from('music_vocab')
+        .select('id, is_quiz_enabled')
+        .eq('music_id', id)
+
+      for (const row of existingQuizRows ?? []) {
+        if (row.is_quiz_enabled) {
+          selectedQuizKeys.add(row.id)
+        }
       }
     }
 
@@ -920,6 +965,7 @@ export class BackendService {
             word: entry.word,
             basic_form: entry.word,
             furigana: entry.furigana,
+            difficulty: entry.difficulty,
             example_japanese: entry.example,
             is_quiz_enabled: selectedQuizKeys.has(entry.id),
             created_by: actorId,
@@ -978,6 +1024,7 @@ export class BackendService {
           lineId: entry.lineId,
           word: entry.word,
           furigana: entry.furigana,
+          difficulty: entry.difficulty,
           meaning: entry.meaning,
           example: entry.example,
           exampleTranslation: entry.exampleTranslation,
@@ -1019,6 +1066,37 @@ export class BackendService {
     )
   }
 
+  async getMusicFieldSuggestions(options?: { includeUnpublished?: boolean }) {
+    const music = await this.searchMusic('', {
+      includeUnpublished: options?.includeUnpublished ?? true,
+    })
+
+    const collectUniqueValues = (values: string[]) => {
+      const canonicalValues = new Map<string, string>()
+
+      for (const value of values) {
+        const trimmedValue = value.trim()
+        if (!trimmedValue) {
+          continue
+        }
+
+        const normalizedValue = trimmedValue.toLowerCase()
+        if (!canonicalValues.has(normalizedValue)) {
+          canonicalValues.set(normalizedValue, trimmedValue)
+        }
+      }
+
+      return [...canonicalValues.values()].sort((left, right) =>
+        left.localeCompare(right),
+      )
+    }
+
+    return {
+      artists: collectUniqueValues(music.map((item) => item.artist)),
+      genres: collectUniqueValues(music.map((item) => item.genre)),
+    }
+  }
+
   async getMusicById(
     id: string,
     options?: { includeUnpublished?: boolean },
@@ -1057,13 +1135,25 @@ export class BackendService {
     const selectedVocabs = allVocabs.filter(({ key }) =>
       selectedKeys.includes(key),
     )
+    const seenSelectedIdentities = new Set<string>()
+    const uniqueSelectedVocabs = selectedVocabs.filter(({ vocab }) => {
+      const identity = buildQuizVocabIdentity(vocab)
 
-    return selectedVocabs.map(({ key, vocab }, index) => {
+      if (seenSelectedIdentities.has(identity)) {
+        return false
+      }
+
+      seenSelectedIdentities.add(identity)
+      return true
+    })
+
+    return uniqueSelectedVocabs.map(({ key, vocab }, index) => {
       const correctMeaning = getLocalizedMeaning(vocab.meaning, locale)
       const wrongOptions = allVocabs
         .filter(
           ({ key: candidateKey, vocab: candidateVocab }) =>
             candidateKey !== key &&
+            candidateVocab.difficulty === vocab.difficulty &&
             getLocalizedMeaning(candidateVocab.meaning, locale) !==
               correctMeaning,
         )
@@ -1073,6 +1163,7 @@ export class BackendService {
         .slice(index, index + 2)
 
       const fallbackWrongOptions = allVocabs
+        .filter(({ vocab: candidateVocab }) => candidateVocab.difficulty === vocab.difficulty)
         .map(({ vocab: candidateVocab }) =>
           getLocalizedMeaning(candidateVocab.meaning, locale),
         )
@@ -1088,6 +1179,7 @@ export class BackendService {
         key,
         word: vocab.word,
         furigana: vocab.furigana,
+        difficulty: vocab.difficulty,
         correctMeaning,
         options: options.sort((left, right) =>
           `${key}-${left}`.localeCompare(`${key}-${right}`),
@@ -1106,10 +1198,24 @@ export class BackendService {
       return undefined
     }
 
+    const selectedKeySet = new Set(item.quizVocabKeys)
+    const dedupedEntries = flattenMusicVocabs(item).filter((entry, index, entries) => {
+      const identity = buildQuizVocabIdentity(entry.vocab)
+
+      return (
+        entries.findIndex(
+          (candidate) =>
+            buildQuizVocabIdentity(candidate.vocab) === identity,
+        ) === index
+      )
+    })
+
     return {
       music: item,
-      selectedKeys: [...item.quizVocabKeys],
-      vocabEntries: flattenMusicVocabs(item),
+      selectedKeys: dedupedEntries
+        .filter((entry) => selectedKeySet.has(entry.key))
+        .map((entry) => entry.key),
+      vocabEntries: dedupedEntries,
     }
   }
 
@@ -1163,6 +1269,169 @@ export class BackendService {
     return buildMusicQuizAttemptRecordFromSupabase(
       data as SupabaseMusicQuizAttemptRow,
     )
+  }
+
+  async saveMusicQuizAnswer(input: {
+    musicId: string
+    questionKey: string
+    selectedMeaning: string
+    correctMeaning: string
+    seqNo: number
+    totalQuestions: number
+  }): Promise<MusicQuizAttemptRecord | null> {
+    if (!hasSupabaseConfig) {
+      await wait(160)
+      return null
+    }
+
+    const actorId = await getCurrentActorId()
+    if (!actorId) {
+      throw new Error('Please sign in to save quiz results.')
+    }
+
+    const isCorrect = input.selectedMeaning === input.correctMeaning
+
+    const { data: existingAttempt, error: existingAttemptError } =
+      await supabase
+        .from('music_quiz_attempt')
+        .select('id, music_id, user_id, score, total_questions, created_at')
+        .eq('music_id', input.musicId)
+        .eq('user_id', actorId)
+        .maybeSingle()
+
+    if (existingAttemptError) {
+      logSupabaseQueryError(
+        'saveMusicQuizAnswer.findExistingAttempt',
+        existingAttemptError,
+      )
+      throw new Error(existingAttemptError.message)
+    }
+
+    let attempt = existingAttempt
+
+    if (!attempt) {
+      const { data: insertedAttempt, error: insertAttemptError } =
+        await supabase
+          .from('music_quiz_attempt')
+          .insert({
+            music_id: input.musicId,
+            user_id: actorId,
+            score: 0,
+            total_questions: input.totalQuestions,
+            created_by: actorId,
+            updated_by: actorId,
+          })
+          .select('id, music_id, user_id, score, total_questions, created_at')
+          .single()
+
+      if (insertAttemptError) {
+        logSupabaseQueryError(
+          'saveMusicQuizAnswer.insertAttempt',
+          insertAttemptError,
+        )
+        throw new Error(insertAttemptError.message)
+      }
+
+      attempt = insertedAttempt
+    }
+
+    const { data: existingAnswer, error: existingAnswerError } = await supabase
+      .from('music_quiz_attempt_answer')
+      .select(
+        'selected_meaning, correct_meaning, is_correct, seq_no, question_key',
+      )
+      .eq('attempt_id', attempt.id)
+      .eq('question_key', input.questionKey)
+      .maybeSingle()
+
+    if (existingAnswerError) {
+      logSupabaseQueryError(
+        'saveMusicQuizAnswer.findExistingAnswer',
+        existingAnswerError,
+      )
+      throw new Error(existingAnswerError.message)
+    }
+
+    const shouldWriteAnswer =
+      !existingAnswer ||
+      existingAnswer.selected_meaning !== input.selectedMeaning ||
+      existingAnswer.correct_meaning !== input.correctMeaning ||
+      existingAnswer.is_correct !== isCorrect ||
+      existingAnswer.seq_no !== input.seqNo
+
+    if (shouldWriteAnswer) {
+      const { error: upsertAnswerError } = await supabase
+        .from('music_quiz_attempt_answer')
+        .upsert(
+          {
+            attempt_id: attempt.id,
+            question_key: input.questionKey,
+            seq_no: input.seqNo,
+            selected_meaning: input.selectedMeaning,
+            correct_meaning: input.correctMeaning,
+            is_correct: isCorrect,
+            created_by: actorId,
+            updated_by: actorId,
+          },
+          {
+            onConflict: 'attempt_id,question_key',
+          },
+        )
+
+      if (upsertAnswerError) {
+        logSupabaseQueryError(
+          'saveMusicQuizAnswer.upsertAnswer',
+          upsertAnswerError,
+        )
+        throw new Error(upsertAnswerError.message)
+      }
+    }
+
+    const { data: storedAnswers, error: storedAnswersError } = await supabase
+      .from('music_quiz_attempt_answer')
+      .select(
+        'question_key, selected_meaning, correct_meaning, is_correct, seq_no',
+      )
+      .eq('attempt_id', attempt.id)
+      .order('seq_no', { ascending: true })
+
+    if (storedAnswersError) {
+      logSupabaseQueryError(
+        'saveMusicQuizAnswer.fetchStoredAnswers',
+        storedAnswersError,
+      )
+      throw new Error(storedAnswersError.message)
+    }
+
+    const score = (storedAnswers ?? []).reduce(
+      (total, answer) => total + (answer.is_correct ? 1 : 0),
+      0,
+    )
+
+    const { error: updateAttemptError } = await supabase
+      .from('music_quiz_attempt')
+      .update({
+        score,
+        total_questions: input.totalQuestions,
+        updated_by: actorId,
+      })
+      .eq('id', attempt.id)
+
+    if (updateAttemptError) {
+      logSupabaseQueryError(
+        'saveMusicQuizAnswer.updateAttempt',
+        updateAttemptError,
+      )
+      throw new Error(updateAttemptError.message)
+    }
+
+    return buildMusicQuizAttemptRecordFromSupabase({
+      ...attempt,
+      score,
+      total_questions: input.totalQuestions,
+      music_quiz_attempt_answer:
+        (storedAnswers as SupabaseMusicQuizAttemptAnswerRow[] | null) ?? [],
+    })
   }
 
   async submitMusicQuizAttempt(input: {
@@ -1546,7 +1815,9 @@ export class BackendService {
     payload: MusicDraftPayload,
     options?: { isPublished?: boolean },
   ) {
-    await this.assertMusicSourceUrlIsUnique(payload.sourceUrl)
+    if (options?.isPublished) {
+      await this.assertMusicSourceUrlIsUnique(payload.sourceUrl)
+    }
 
     return this.persistMusic(
       crypto.randomUUID(),
@@ -1561,16 +1832,19 @@ export class BackendService {
     payload: MusicDraftPayload,
     options?: { isPublished?: boolean },
   ) {
-    await this.assertMusicSourceUrlIsUnique(payload.sourceUrl, {
-      excludeMusicId: id,
-    })
-
     const existing = await this.getMusicById(id, { includeUnpublished: true })
+    const nextIsPublished = options?.isPublished ?? existing?.isPublished ?? false
+
+    if (nextIsPublished) {
+      await this.assertMusicSourceUrlIsUnique(payload.sourceUrl, {
+        excludeMusicId: id,
+      })
+    }
 
     return this.persistMusic(
       id,
       payload,
-      options?.isPublished ?? existing?.isPublished ?? false,
+      nextIsPublished,
       payload.submissionSource ?? existing?.submissionSource ?? 'upload',
     )
   }

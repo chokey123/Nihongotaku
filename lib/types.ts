@@ -1,12 +1,14 @@
 export type Locale = "ja" | "en" | "zh";
 export type LocalizedText = Partial<Record<Locale, string>>;
 export type MusicSubmissionSource = "upload" | "wish";
+export type VocabDifficulty = "beginner" | "intermediate" | "hard";
 
 export type UserRole = "guest" | "admin";
 
 export interface VocabItem {
   word: string;
   furigana: string;
+  difficulty: VocabDifficulty;
   meaning: LocalizedText;
   example: string;
   exampleTranslation: LocalizedText;
@@ -17,10 +19,21 @@ export interface MusicVocabItem extends VocabItem {
   lineId: string;
 }
 
+export interface AIMusicVocabSuggestion {
+  lineId: string;
+  word: string;
+  furigana: string;
+  difficulty: VocabDifficulty;
+  meaningZh: string;
+  example: string;
+  exampleTranslationZh: string;
+}
+
 export interface MusicQuizQuestion {
   key: string;
   word: string;
   furigana: string;
+  difficulty: VocabDifficulty;
   correctMeaning: string;
   options: string[];
 }
