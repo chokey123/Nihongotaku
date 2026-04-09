@@ -10,7 +10,10 @@ import type {
 } from "@/lib/types";
 
 type LegacyLyricLine = LyricLine & {
-  vocab: Array<Omit<MusicVocabItem, "id" | "lineId">>;
+  vocab: Array<
+    Omit<MusicVocabItem, "id" | "lineId" | "difficulty"> &
+      Partial<Pick<MusicVocabItem, "difficulty">>
+  >;
 };
 
 type LegacyMusicItem = Omit<MusicItem, "lyrics" | "vocab"> & {

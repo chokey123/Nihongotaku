@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { backendService } from '@/lib/services/backend-service'
+import { aiService } from '@/lib/services/ai-service'
 import {
   loadJachDictionary,
   lookupJachDictionary,
@@ -19,6 +20,7 @@ import type {
   MusicDraftPayload,
   MusicItem,
   VocabItem,
+  VocabDifficulty,
 } from '@/lib/types'
 
 const translationLocales: Locale[] = ['zh', 'en', 'ja']
@@ -95,6 +97,7 @@ const localizedFieldLabels: Record<
     translation: string
     word: string
     furigana: string
+    difficulty?: string
     meaning: string
     example: string
     exampleTranslation: string
@@ -267,6 +270,68 @@ const adminMusicFlowLabels: Record<
 const lrcLinePattern = /^\[(\d{2}):(\d{2})(?:\.(\d{2}))?\](.*)$/
 const lrcMetadataPattern = /^\[[A-Za-z]+:[^\]]*\]$/
 
+function normalizeSuggestionKeyword(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function getClosestSuggestions(input: string, values: string[]) {
+  const keyword = normalizeSuggestionKeyword(input)
+
+  if (!keyword) {
+    return values.slice(0, 5)
+  }
+
+  return values
+    .filter((value) => normalizeSuggestionKeyword(value).includes(keyword))
+    .sort((left, right) => {
+      const leftNormalized = normalizeSuggestionKeyword(left)
+      const rightNormalized = normalizeSuggestionKeyword(right)
+      const leftStartsWith = leftNormalized.startsWith(keyword) ? 0 : 1
+      const rightStartsWith = rightNormalized.startsWith(keyword) ? 0 : 1
+
+      if (leftStartsWith !== rightStartsWith) {
+        return leftStartsWith - rightStartsWith
+      }
+
+      const leftIndex = leftNormalized.indexOf(keyword)
+      const rightIndex = rightNormalized.indexOf(keyword)
+
+      if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex
+      }
+
+      return left.localeCompare(right)
+    })
+    .slice(0, 5)
+}
+
+const vocabDifficultyOptions: VocabDifficulty[] = [
+  'beginner',
+  'intermediate',
+  'hard',
+]
+
+const vocabDifficultyLabels: Record<
+  Locale,
+  Record<VocabDifficulty, string>
+> = {
+  zh: {
+    beginner: '初级',
+    intermediate: '中级',
+    hard: '困难',
+  },
+  en: {
+    beginner: 'Beginner',
+    intermediate: 'Intermediate',
+    hard: 'Hard',
+  },
+  ja: {
+    beginner: '初級',
+    intermediate: '中級',
+    hard: '難しい',
+  },
+}
+
 function emptyLocalizedText(): LocalizedText {
   return {
     zh: '',
@@ -279,6 +344,7 @@ function createEmptyVocab(): VocabItem {
   return {
     word: '',
     furigana: '',
+    difficulty: 'intermediate',
     meaning: emptyLocalizedText(),
     example: '',
     exampleTranslation: emptyLocalizedText(),
@@ -491,6 +557,7 @@ export function AdminMusicForm({
     'loading' | 'ready' | 'error'
   >('loading')
   const [isAddingVocab, setIsAddingVocab] = useState(false)
+  const [isGettingAiVocabs, setIsGettingAiVocabs] = useState(false)
   const [pendingSelection, setPendingSelection] =
     useState<VocabContextMenuState | null>(null)
   const [sourceUrl, setSourceUrl] = useState(
@@ -502,6 +569,10 @@ export function AdminMusicForm({
   const [title, setTitle] = useState(initialMusic?.title ?? '')
   const [artist, setArtist] = useState(initialMusic?.artist ?? '')
   const [genre, setGenre] = useState(initialMusic?.genre ?? '')
+  const [artistSuggestions, setArtistSuggestions] = useState<string[]>([])
+  const [genreSuggestions, setGenreSuggestions] = useState<string[]>([])
+  const [isArtistSuggestionOpen, setIsArtistSuggestionOpen] = useState(false)
+  const [isGenreSuggestionOpen, setIsGenreSuggestionOpen] = useState(false)
   const [reviewRequestedAt, setReviewRequestedAt] = useState<string | null>(
     initialMusic?.reviewRequestedAt ?? null,
   )
@@ -513,17 +584,18 @@ export function AdminMusicForm({
   const youtubeThumbnailUrl = useYoutubeThumbnail(youtubeIdPreview)
   const isUploadFlow = basePath === 'upload'
   const canRequestReview = isUploadFlow && !canPublish && mode === 'edit'
-  const createdAt = initialMusic?.createdAt ?? null
-  const priorityDeadline = createdAt
-    ? new Date(new Date(createdAt).getTime() + 7 * 24 * 60 * 60 * 1000)
-    : null
-  const isPriorityExpired = priorityDeadline
-    ? priorityDeadline.getTime() < Date.now()
-    : false
   const hasRequiredMetadata = [sourceUrl, title, artist, genre].every(
     (value) => value.trim().length > 0,
   )
   const lrcUploadUnlocked = mode === 'edit' && hasRequiredMetadata
+  const artistDropdownSuggestions = useMemo(
+    () => getClosestSuggestions(artist, artistSuggestions),
+    [artist, artistSuggestions],
+  )
+  const genreDropdownSuggestions = useMemo(
+    () => getClosestSuggestions(genre, genreSuggestions),
+    [genre, genreSuggestions],
+  )
   const canPreview =
     mode === 'edit' &&
     Boolean(initialMusic?.id) &&
@@ -622,6 +694,27 @@ export function AdminMusicForm({
     setStatus(flowLabels.lrcImported)
     resetInput()
   }
+
+  useEffect(() => {
+    let isMounted = true
+
+    backendService
+      .getMusicFieldSuggestions({ includeUnpublished: true })
+      .then((suggestions) => {
+        if (!isMounted) return
+        setArtistSuggestions(suggestions.artists)
+        setGenreSuggestions(suggestions.genres)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setArtistSuggestions([])
+        setGenreSuggestions([])
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -824,6 +917,96 @@ export function AdminMusicForm({
     } finally {
       setIsAddingVocab(false)
       addVocabButtonPointerDownRef.current = false
+    }
+  }
+
+  const addVocabsFromAi = async () => {
+    if (lyrics.length === 0) {
+      setStatus(
+        initialLocale === 'en'
+          ? 'Please import or enter lyrics first.'
+          : initialLocale === 'ja'
+            ? '先に歌詞を入力または取り込んでください。'
+            : '請先匯入或填寫歌詞。',
+      )
+      return
+    }
+
+    setIsGettingAiVocabs(true)
+
+    try {
+      const suggestions = await aiService.getMusicVocabsFromLyrics(lyrics)
+
+      setVocabs((current) => {
+        const nextVocabs = [...current]
+
+        for (const suggestion of suggestions) {
+          const duplicateIndex = nextVocabs.findIndex(
+            (entry) =>
+              entry.lineId === suggestion.lineId && entry.word === suggestion.word,
+          )
+
+          if (duplicateIndex >= 0) {
+            const existing = nextVocabs[duplicateIndex]
+            nextVocabs[duplicateIndex] = {
+              ...existing,
+              furigana: existing.furigana || suggestion.furigana,
+              difficulty: existing.difficulty || suggestion.difficulty,
+              meaning: {
+                ...existing.meaning,
+                zh: existing.meaning.zh || suggestion.meaningZh,
+              },
+              example: existing.example || suggestion.example,
+              exampleTranslation: {
+                ...existing.exampleTranslation,
+                zh:
+                  existing.exampleTranslation.zh ||
+                  suggestion.exampleTranslationZh,
+              },
+            }
+            continue
+          }
+
+          const nextId = `${suggestion.lineId}-${nextVocabs.filter((entry) => entry.lineId === suggestion.lineId).length}`
+          nextVocabs.push({
+            ...createEmptyMusicVocab(suggestion.lineId, nextId),
+            word: suggestion.word,
+            furigana: suggestion.furigana,
+            difficulty: suggestion.difficulty,
+            meaning: {
+              ...emptyLocalizedText(),
+              zh: suggestion.meaningZh,
+            },
+            example: suggestion.example,
+            exampleTranslation: {
+              ...emptyLocalizedText(),
+              zh: suggestion.exampleTranslationZh,
+            },
+          })
+        }
+
+        return nextVocabs
+      })
+
+      setStatus(
+        initialLocale === 'en'
+          ? `AI vocab added: ${suggestions.length}`
+          : initialLocale === 'ja'
+            ? `AI単語を追加しました: ${suggestions.length}`
+            : `AI 已加入單字：${suggestions.length}`,
+      )
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : initialLocale === 'en'
+            ? 'Failed to get vocab from AI.'
+            : initialLocale === 'ja'
+              ? 'AI から単語を取得できませんでした。'
+              : '無法從 AI 取得單字。',
+      )
+    } finally {
+      setIsGettingAiVocabs(false)
     }
   }
 
@@ -1060,18 +1243,84 @@ export function AdminMusicForm({
           />
         </FormField>
         <FormField label={dict.labels.artist}>
-          <input
-            value={artist}
-            onChange={(event) => setArtist(event.target.value)}
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
-          />
+          <div className="relative">
+            <input
+              value={artist}
+              onChange={(event) => {
+                setArtist(event.target.value)
+                setIsArtistSuggestionOpen(true)
+              }}
+              onFocus={() => {
+                if (artistDropdownSuggestions.length > 0) {
+                  setIsArtistSuggestionOpen(true)
+                }
+              }}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsArtistSuggestionOpen(false)
+                }, 120)
+              }}
+              className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+            />
+            {isArtistSuggestionOpen && artistDropdownSuggestions.length > 0 ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
+                {artistDropdownSuggestions.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      setArtist(value)
+                      setIsArtistSuggestionOpen(false)
+                    }}
+                    className="block w-full border-b border-border/60 px-4 py-3 text-left text-sm font-medium text-foreground transition hover:bg-brand-soft/40 last:border-b-0"
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </FormField>
         <FormField label={dict.labels.genre}>
-          <input
-            value={genre}
-            onChange={(event) => setGenre(event.target.value)}
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
-          />
+          <div className="relative">
+            <input
+              value={genre}
+              onChange={(event) => {
+                setGenre(event.target.value)
+                setIsGenreSuggestionOpen(true)
+              }}
+              onFocus={() => {
+                if (genreDropdownSuggestions.length > 0) {
+                  setIsGenreSuggestionOpen(true)
+                }
+              }}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsGenreSuggestionOpen(false)
+                }, 120)
+              }}
+              className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+            />
+            {isGenreSuggestionOpen && genreDropdownSuggestions.length > 0 ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
+                {genreDropdownSuggestions.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      setGenre(value)
+                      setIsGenreSuggestionOpen(false)
+                    }}
+                    className="block w-full border-b border-border/60 px-4 py-3 text-left text-sm font-medium text-foreground transition hover:bg-brand-soft/40 last:border-b-0"
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </FormField>
       </div>
 
@@ -1412,6 +1661,39 @@ export function AdminMusicForm({
                             </FormField>
 
                             <FormField
+                              label={labels.difficulty ?? 'Difficulty'}
+                            >
+                              <select
+                                value={vocab.difficulty}
+                                onChange={(event) =>
+                                  setVocabs((current) =>
+                                    current.map((entry) =>
+                                      entry.id === vocab.id
+                                        ? {
+                                            ...entry,
+                                            difficulty:
+                                              event.target
+                                                .value as VocabDifficulty,
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                              >
+                                {vocabDifficultyOptions.map((difficulty) => (
+                                  <option key={difficulty} value={difficulty}>
+                                    {
+                                      vocabDifficultyLabels[
+                                        translationLocale
+                                      ][difficulty]
+                                    }
+                                  </option>
+                                ))}
+                              </select>
+                            </FormField>
+
+                            <FormField
                               label={`${labels.meaning} (${translationLocale.toUpperCase()})`}
                             >
                               <input
@@ -1519,6 +1801,20 @@ export function AdminMusicForm({
           {isPending && submitAction === 'draft'
             ? '...'
             : dict.labels.saveDraft}
+        </button>
+        <button
+          type="button"
+          onClick={addVocabsFromAi}
+          disabled={isPending || isGettingAiVocabs || lyrics.length === 0}
+          className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+        >
+          {isGettingAiVocabs
+            ? '...'
+            : initialLocale === 'en'
+              ? 'Get Vocab By AI'
+              : initialLocale === 'ja'
+                ? 'AIで単語を取得'
+                : 'Get Vocab By AI'}
         </button>
         {canPreview && initialMusic?.id ? (
           <button

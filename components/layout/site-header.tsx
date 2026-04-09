@@ -1,13 +1,13 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 
-import { useAuth } from "@/components/providers/auth-provider";
-import { AuthButton } from "@/components/ui/auth-button";
-import { CatLogo } from "@/components/ui/cat-logo";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import type { Dictionary } from "@/lib/i18n";
+import { useAuth } from '@/components/providers/auth-provider'
+import { AuthButton } from '@/components/ui/auth-button'
+import { CatLogo } from '@/components/ui/cat-logo'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
+import type { Dictionary } from '@/lib/i18n'
 
 const navItems = (
   locale: string,
@@ -15,55 +15,59 @@ const navItems = (
   isLoggedIn: boolean,
   isAdmin: boolean,
 ) => [
-  { href: `/${locale}/music`, label: dict.nav.musicSearch },
+  // { href: `/${locale}/music`, label: dict.nav.musicSearch },
   { href: `/${locale}/article`, label: dict.nav.articles },
   { href: `/${locale}/wish`, label: dict.nav.wish },
-  ...(isLoggedIn ? [{ href: `/${locale}/upload`, label: dict.nav.upload }] : []),
-  ...(isAdmin ? [{ href: `/${locale}/admin`, label: dict.controls.admin }] : []),
-];
+  ...(isLoggedIn
+    ? [{ href: `/${locale}/upload`, label: dict.nav.upload }]
+    : []),
+  ...(isAdmin
+    ? [{ href: `/${locale}/admin`, label: dict.controls.admin }]
+    : []),
+]
 
 export function SiteHeader({
   locale,
   dict,
 }: {
-  locale: string;
-  dict: Dictionary;
+  locale: string
+  dict: Dictionary
 }) {
-  const { user } = useAuth();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
-  const lastScrollYRef = useRef(0);
-  const items = navItems(locale, dict, Boolean(user), user?.role === "admin");
+  const { user } = useAuth()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isVisible, setIsVisible] = useState(true)
+  const lastScrollYRef = useRef(0)
+  const items = navItems(locale, dict, Boolean(user), user?.role === 'admin')
 
   useEffect(() => {
     const handleScroll = () => {
-      const nextScrollY = window.scrollY;
-      const previousScrollY = lastScrollYRef.current;
+      const nextScrollY = window.scrollY
+      const previousScrollY = lastScrollYRef.current
 
       if (nextScrollY <= 12) {
-        setIsVisible(true);
+        setIsVisible(true)
       } else if (nextScrollY > previousScrollY) {
-        setIsVisible(false);
-        setIsMobileMenuOpen(false);
+        setIsVisible(false)
+        setIsMobileMenuOpen(false)
       } else if (nextScrollY < previousScrollY) {
-        setIsVisible(true);
+        setIsVisible(true)
       }
 
-      lastScrollYRef.current = nextScrollY;
-    };
+      lastScrollYRef.current = nextScrollY
+    }
 
-    lastScrollYRef.current = window.scrollY;
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    lastScrollYRef.current = window.scrollY
+    window.addEventListener('scroll', handleScroll, { passive: true })
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
 
   return (
     <header
       className={`sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl transition-transform duration-300 ${
-        isVisible ? "translate-y-0" : "-translate-y-full"
+        isVisible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -128,5 +132,5 @@ export function SiteHeader({
         </div>
       </div>
     </header>
-  );
+  )
 }

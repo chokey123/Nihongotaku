@@ -6,9 +6,30 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 type ThemeMode = "light" | "dark";
+const THEME_STORAGE_KEY = "nihongotaku-theme";
+
+function resolveThemeFromBrowser(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  if (document.documentElement.classList.contains("dark")) {
+    return "dark";
+  }
+
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "dark" || stored === "light") {
+    return stored;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
 
 interface ThemeContextValue {
   theme: ThemeMode;
@@ -19,31 +40,17 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeMode>("light");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const stored = window.localStorage.getItem("nihongotaku-theme");
-      const nextTheme =
-        stored === "dark" || stored === "light"
-          ? stored
-          : window.matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark"
-            : "light";
-
-      setTheme(nextTheme);
-      setMounted(true);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, []);
+  const [theme, setTheme] = useState<ThemeMode>(() => resolveThemeFromBrowser());
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    window.localStorage.setItem("nihongotaku-theme", theme);
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   const value = useMemo(

@@ -1,10 +1,16 @@
 'use client'
 
-import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 import type { MusicItem } from '@/lib/types'
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
+
+const learnableVocabBadgeLabel = {
+  zh: (count: number) => `${count}單詞`,
+  ja: (count: number) => `${count}単語`,
+  en: (count: number) => `${count} vocab`,
+} as const
 
 export function MusicCard({
   item,
@@ -19,7 +25,21 @@ export function MusicCard({
   metaBadge?: string
   disableLink?: boolean
 }) {
+  const router = useRouter()
   const thumbnailUrl = useYoutubeThumbnail(item.youtubeId)
+  const normalizedLocale =
+    locale === 'zh' || locale === 'ja' || locale === 'en' ? locale : 'zh'
+  const learnableVocabCount = new Set(
+    item.vocab.map((entry) => entry.word.trim().toLowerCase()).filter(Boolean),
+  ).size
+  const resolvedMetaBadge =
+    metaBadge ??
+    (learnableVocabCount > 0
+      ? learnableVocabBadgeLabel[normalizedLocale](learnableVocabCount)
+      : undefined)
+  const detailHref = href ?? `/${locale}/music/${item.id}`
+  const quizHref = `/${locale}/music/quiz/${item.id}`
+  const canOpenQuizFromBadge = !metaBadge && learnableVocabCount > 0
 
   const content = (
     <>
@@ -57,8 +77,23 @@ export function MusicCard({
             {item.genre}
           </span>
         </div>
-        {metaBadge ? (
-          <p className="text-xs font-semibold text-brand-strong">{metaBadge}</p>
+        {resolvedMetaBadge ? (
+          canOpenQuizFromBadge ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                router.push(quizHref)
+              }}
+              className="text-left text-xs font-semibold text-brand-strong transition hover:text-brand"
+            >
+              {resolvedMetaBadge}
+            </button>
+          ) : (
+            <p className="text-xs font-semibold text-brand-strong">
+              {resolvedMetaBadge}
+            </p>
+          )
         ) : null}
       </div>
     </>
@@ -73,11 +108,21 @@ export function MusicCard({
   }
 
   return (
-    <Link
-      href={href ?? `/${locale}/music/${item.id}`}
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={() => {
+        router.push(detailHref)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          router.push(detailHref)
+        }
+      }}
       className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
     >
       {content}
-    </Link>
+    </article>
   )
 }
