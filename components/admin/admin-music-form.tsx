@@ -3,8 +3,13 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { useAuth } from '@/components/providers/auth-provider'
 import { backendService } from '@/lib/services/backend-service'
 import { aiService } from '@/lib/services/ai-service'
+import {
+  AutocompleteInput,
+  type AutocompleteOption,
+} from '@/components/ui/autocomplete-input'
 import {
   loadJachDictionary,
   lookupJachDictionary,
@@ -13,6 +18,7 @@ import {
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 import type { Dictionary } from '@/lib/i18n'
 import type {
+  AIMusicVocabQuota,
   LocalizedText,
   Locale,
   LyricLine,
@@ -23,7 +29,7 @@ import type {
   VocabDifficulty,
 } from '@/lib/types'
 
-const translationLocales: Locale[] = ['zh', 'en', 'ja']
+const translationEditorLocales: Locale[] = ['zh', 'en']
 
 const publishActionLabels: Record<
   Locale,
@@ -211,11 +217,14 @@ const adminMusicFlowLabels: Record<
     timelineMismatch: string
     metadataRequired: string
     lrcImported: string
+    lyricsFlow: string
+    timelineFlow: string
+    lyricsWarning: string
   }
 > = {
   zh: {
     uploadSectionTitle: 'LRC 匯入',
-    uploadSectionHint: '請在這裡分別上傳日文、中文與英文 LRC。',
+    uploadSectionHint: '可以選擇使用LRC文件上傳歌詞。',
     uploadLockedHint:
       '請先填完網址、歌手、標題、曲風，並先儲存草稿，之後才會開放 LRC 上傳。',
     saveDraftFirst: '請先儲存草稿',
@@ -228,6 +237,10 @@ const adminMusicFlowLabels: Record<
     timelineMismatch: '翻譯 LRC 的時間軸必須與日文原文完全一致。',
     metadataRequired: '請先填寫網址、歌手、標題與曲風。',
     lrcImported: 'LRC 已匯入。',
+    lyricsFlow: '添加/修改歌詞',
+    timelineFlow: '校對時間軸',
+    lyricsWarning:
+      '重新編輯歌詞會清除目前已建立的單詞卡與測驗內容，確定要繼續嗎？',
   },
   en: {
     uploadSectionTitle: 'LRC Import',
@@ -245,6 +258,10 @@ const adminMusicFlowLabels: Record<
       'Translation LRC timestamps must exactly match the Japanese lyrics.',
     metadataRequired: 'Please fill in URL, artist, title, and genre first.',
     lrcImported: 'LRC imported.',
+    lyricsFlow: 'Add / Edit Lyrics',
+    timelineFlow: 'Timeline',
+    lyricsWarning:
+      'Editing the lyrics again will clear the current vocab cards and quiz content. Continue?',
   },
   ja: {
     uploadSectionTitle: 'LRC 取り込み',
@@ -264,6 +281,10 @@ const adminMusicFlowLabels: Record<
     metadataRequired:
       '先に URL、アーティスト、タイトル、ジャンルを入力してください。',
     lrcImported: 'LRC を取り込みました。',
+    lyricsFlow: '歌詞を追加/編集',
+    timelineFlow: 'タイムライン',
+    lyricsWarning:
+      '歌詞を編集し直すと、現在の単語カードとクイズ内容が削除されます。続行しますか？',
   },
 }
 
@@ -311,10 +332,7 @@ const vocabDifficultyOptions: VocabDifficulty[] = [
   'hard',
 ]
 
-const vocabDifficultyLabels: Record<
-  Locale,
-  Record<VocabDifficulty, string>
-> = {
+const vocabDifficultyLabels: Record<Locale, Record<VocabDifficulty, string>> = {
   zh: {
     beginner: '初级',
     intermediate: '中级',
@@ -485,28 +503,6 @@ function mergeTranslationFromLrc(
   }))
 }
 
-function formatTimeLabel(atMs: number) {
-  const totalSeconds = Math.floor(atMs / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, '0')
-  const seconds = (totalSeconds % 60).toString().padStart(2, '0')
-
-  return `${minutes}:${seconds}`
-}
-
-function shiftLyricsTiming(currentLyrics: LyricLine[], deltaMs: number) {
-  return currentLyrics.map((line) => {
-    const nextAtMs = Math.max(0, line.atMs + deltaMs)
-
-    return {
-      ...line,
-      atMs: nextAtMs,
-      timeLabel: formatTimeLabel(nextAtMs),
-    }
-  })
-}
-
 function FormField({
   label,
   children,
@@ -538,6 +534,7 @@ export function AdminMusicForm({
   canPublish?: boolean
 }) {
   const router = useRouter()
+  const { user } = useAuth()
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState('')
   const [submitAction, setSubmitAction] = useState<
@@ -558,6 +555,7 @@ export function AdminMusicForm({
   >('loading')
   const [isAddingVocab, setIsAddingVocab] = useState(false)
   const [isGettingAiVocabs, setIsGettingAiVocabs] = useState(false)
+  const [aiVocabQuota, setAiVocabQuota] = useState<AIMusicVocabQuota | null>(null)
   const [pendingSelection, setPendingSelection] =
     useState<VocabContextMenuState | null>(null)
   const [sourceUrl, setSourceUrl] = useState(
@@ -571,8 +569,6 @@ export function AdminMusicForm({
   const [genre, setGenre] = useState(initialMusic?.genre ?? '')
   const [artistSuggestions, setArtistSuggestions] = useState<string[]>([])
   const [genreSuggestions, setGenreSuggestions] = useState<string[]>([])
-  const [isArtistSuggestionOpen, setIsArtistSuggestionOpen] = useState(false)
-  const [isGenreSuggestionOpen, setIsGenreSuggestionOpen] = useState(false)
   const [reviewRequestedAt, setReviewRequestedAt] = useState<string | null>(
     initialMusic?.reviewRequestedAt ?? null,
   )
@@ -588,12 +584,20 @@ export function AdminMusicForm({
     (value) => value.trim().length > 0,
   )
   const lrcUploadUnlocked = mode === 'edit' && hasRequiredMetadata
-  const artistDropdownSuggestions = useMemo(
-    () => getClosestSuggestions(artist, artistSuggestions),
+  const artistDropdownSuggestions = useMemo<AutocompleteOption[]>(
+    () =>
+      getClosestSuggestions(artist, artistSuggestions).map((value) => ({
+        key: `artist:${value}`,
+        value,
+      })),
     [artist, artistSuggestions],
   )
-  const genreDropdownSuggestions = useMemo(
-    () => getClosestSuggestions(genre, genreSuggestions),
+  const genreDropdownSuggestions = useMemo<AutocompleteOption[]>(
+    () =>
+      getClosestSuggestions(genre, genreSuggestions).map((value) => ({
+        key: `genre:${value}`,
+        value,
+      })),
     [genre, genreSuggestions],
   )
   const canPreview =
@@ -605,6 +609,10 @@ export function AdminMusicForm({
         line.japanese.trim().length > 0 &&
         Object.values(line.translation).some((value) => value?.trim().length),
     )
+  const hasExistingQuizContent =
+    vocabs.length > 0 || (initialMusic?.quizVocabKeys.length ?? 0) > 0
+  const shouldWarnBeforeEditingLyrics =
+    lyrics.length > 0 && hasExistingQuizContent
   const isContentComplete =
     lyrics.length > 0 &&
     lyrics.every(
@@ -613,6 +621,11 @@ export function AdminMusicForm({
         Object.values(line.translation).some((value) => value?.trim().length),
     ) &&
     vocabs.length > 5
+  const canShowPublishButton = canPublish && (isPublished || isContentComplete)
+  const canUseAiVocab =
+    (aiVocabQuota?.isAdmin ?? user?.role === 'admin') === true
+      ? true
+      : (aiVocabQuota?.remaining ?? 0) > 0
   const areAllCollapsed =
     lyrics.length > 0 && collapsedLineIds.length === lyrics.length
   const tokenizerRef = useRef<KuromojiTokenizer | null>(null)
@@ -715,6 +728,34 @@ export function AdminMusicForm({
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setAiVocabQuota(null)
+      return
+    }
+
+    let isMounted = true
+
+    aiService
+      .getMusicVocabQuota()
+      .then((quota) => {
+        if (!isMounted) return
+        setAiVocabQuota(quota)
+      })
+        .catch(() => {
+          if (!isMounted) return
+          setAiVocabQuota(
+            user.role === 'admin'
+              ? { limit: null, used: 0, remaining: null, isAdmin: true }
+              : { limit: 5, used: 5, remaining: 0, isAdmin: false },
+          )
+        })
+
+    return () => {
+      isMounted = false
+    }
+  }, [user])
 
   useEffect(() => {
     let isMounted = true
@@ -935,7 +976,9 @@ export function AdminMusicForm({
     setIsGettingAiVocabs(true)
 
     try {
-      const suggestions = await aiService.getMusicVocabsFromLyrics(lyrics)
+      const { suggestions, quota } = await aiService.getMusicVocabsFromLyrics(
+        lyrics,
+      )
 
       setVocabs((current) => {
         const nextVocabs = [...current]
@@ -943,7 +986,8 @@ export function AdminMusicForm({
         for (const suggestion of suggestions) {
           const duplicateIndex = nextVocabs.findIndex(
             (entry) =>
-              entry.lineId === suggestion.lineId && entry.word === suggestion.word,
+              entry.lineId === suggestion.lineId &&
+              entry.word === suggestion.word,
           )
 
           if (duplicateIndex >= 0) {
@@ -995,6 +1039,9 @@ export function AdminMusicForm({
             ? `AI単語を追加しました: ${suggestions.length}`
             : `AI 已加入單字：${suggestions.length}`,
       )
+      if (quota) {
+        setAiVocabQuota(quota)
+      }
     } catch (error) {
       setStatus(
         error instanceof Error
@@ -1134,6 +1181,70 @@ export function AdminMusicForm({
     })
   }
 
+  const saveAndOpenPreview = () => {
+    if (!hasRequiredMetadata) {
+      setStatus(flowLabels.metadataRequired)
+      return
+    }
+
+    if (!initialMusic?.id) {
+      return
+    }
+
+    const payload: MusicDraftPayload = {
+      sourceUrl,
+      title,
+      artist,
+      genre,
+      lyrics,
+      vocab: vocabs,
+      reviewRequestedAt,
+    }
+
+    setSubmitAction('draft')
+    startTransition(async () => {
+      try {
+        const response = await backendService.updateMusic(
+          initialMusic.id,
+          payload,
+          {
+            isPublished,
+          },
+        )
+
+        setIsPublished(response.isPublished)
+        setStatus(`${publishLabels.draftSaved} · ${response.id}`)
+        router.push(`/${initialLocale}/music/preview/${response.id}`)
+      } catch (error) {
+        setStatus(
+          `${publishLabels.saveFailed}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+        )
+      } finally {
+        setSubmitAction(null)
+      }
+    })
+  }
+
+  const openLyricsEditor = () => {
+    if (!initialMusic?.id) {
+      return
+    }
+
+    if (
+      shouldWarnBeforeEditingLyrics &&
+      typeof window !== 'undefined' &&
+      !window.confirm(flowLabels.lyricsWarning)
+    ) {
+      return
+    }
+
+    router.push(
+      `/${initialLocale}/music/lyrics/${initialMusic.id}?from=${basePath}`,
+    )
+  }
+
   return (
     <div className="glass-panel rounded-[32px] border border-border p-6">
       {youtubeThumbnailUrl ? (
@@ -1161,7 +1272,7 @@ export function AdminMusicForm({
             {artist || dict.labels.artist}
           </p>
         </div>
-        <span className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-muted dark:bg-white">
+        <span className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-muted">
           {isPublished
             ? publishLabels.publishedState
             : publishLabels.draftState}
@@ -1201,7 +1312,7 @@ export function AdminMusicForm({
             </p>
           </div>
           {priorityDeadline && !isPublished ? (
-            <div className="mt-4 rounded-2xl border border-border bg-white px-4 py-3 text-xs font-medium text-foreground dark:bg-white">
+            <div className="mt-4 rounded-2xl border border-border bg-surface-strong px-4 py-3 text-xs font-medium text-foreground">
               {isPriorityExpired
                 ? initialLocale === 'en'
                   ? 'The 7-day priority editing window has passed. If the content is still incomplete, an administrator may step in to finish it.'
@@ -1243,84 +1354,28 @@ export function AdminMusicForm({
           />
         </FormField>
         <FormField label={dict.labels.artist}>
-          <div className="relative">
-            <input
-              value={artist}
-              onChange={(event) => {
-                setArtist(event.target.value)
-                setIsArtistSuggestionOpen(true)
-              }}
-              onFocus={() => {
-                if (artistDropdownSuggestions.length > 0) {
-                  setIsArtistSuggestionOpen(true)
-                }
-              }}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsArtistSuggestionOpen(false)
-                }, 120)
-              }}
-              className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
-            />
-            {isArtistSuggestionOpen && artistDropdownSuggestions.length > 0 ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
-                {artistDropdownSuggestions.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault()
-                      setArtist(value)
-                      setIsArtistSuggestionOpen(false)
-                    }}
-                    className="block w-full border-b border-border/60 px-4 py-3 text-left text-sm font-medium text-foreground transition hover:bg-brand-soft/40 last:border-b-0"
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <AutocompleteInput
+            value={artist}
+            onValueChange={setArtist}
+            suggestions={artistDropdownSuggestions}
+            onSelect={(option) => {
+              setArtist(option.value)
+            }}
+            wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            inputClassName="w-full bg-transparent outline-none"
+          />
         </FormField>
         <FormField label={dict.labels.genre}>
-          <div className="relative">
-            <input
-              value={genre}
-              onChange={(event) => {
-                setGenre(event.target.value)
-                setIsGenreSuggestionOpen(true)
-              }}
-              onFocus={() => {
-                if (genreDropdownSuggestions.length > 0) {
-                  setIsGenreSuggestionOpen(true)
-                }
-              }}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsGenreSuggestionOpen(false)
-                }, 120)
-              }}
-              className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
-            />
-            {isGenreSuggestionOpen && genreDropdownSuggestions.length > 0 ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
-                {genreDropdownSuggestions.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault()
-                      setGenre(value)
-                      setIsGenreSuggestionOpen(false)
-                    }}
-                    className="block w-full border-b border-border/60 px-4 py-3 text-left text-sm font-medium text-foreground transition hover:bg-brand-soft/40 last:border-b-0"
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <AutocompleteInput
+            value={genre}
+            onValueChange={setGenre}
+            suggestions={genreDropdownSuggestions}
+            onSelect={(option) => {
+              setGenre(option.value)
+            }}
+            wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            inputClassName="w-full bg-transparent outline-none"
+          />
         </FormField>
       </div>
 
@@ -1337,7 +1392,7 @@ export function AdminMusicForm({
             </p>
           </div>
           {!lrcUploadUnlocked ? (
-            <span className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-muted dark:bg-white">
+            <span className="rounded-full border border-border bg-surface-strong px-3 py-1.5 text-xs font-semibold text-muted">
               {flowLabels.saveDraftFirst}
             </span>
           ) : null}
@@ -1404,25 +1459,61 @@ export function AdminMusicForm({
             >
               {areAllCollapsed ? uiLabels.expandAll : uiLabels.collapseAll}
             </button>
-            <button
-              type="button"
-              onClick={() =>
-                setLyrics((current) => shiftLyricsTiming(current, -200))
-              }
-              className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand"
-            >
-              {uiLabels.shiftEarlier ?? 'All -0.2s'}
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setLyrics((current) => shiftLyricsTiming(current, 200))
-              }
-              className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand"
-            >
-              {uiLabels.shiftLater ?? 'All +0.2s'}
-            </button>
-            {translationLocales.map((locale) => (
+            {lyrics.length > 0 ? (
+              <>
+                <button
+                type="button"
+                onClick={addVocabsFromAi}
+                disabled={isPending || isGettingAiVocabs || !canUseAiVocab}
+                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+              >
+                {isGettingAiVocabs
+                  ? '...'
+                  : initialLocale === 'en'
+                    ? 'Get Vocab By AI'
+                    : initialLocale === 'ja'
+                      ? 'AIã§å˜èªžã‚’å–å¾—'
+                      : 'Get Vocab By AI'}
+              </button>
+              {user && !aiVocabQuota?.isAdmin ? (
+                <>
+                <span className="self-center text-xs text-muted">
+                  {`${aiVocabQuota?.remaining ?? 0}/5 left today`}
+                </span>
+                <span className="hidden self-center text-xs text-muted">
+                  {initialLocale === 'en'
+                    ? `${aiVocabQuota?.remaining ?? 0}/5 left today`
+                    : initialLocale === 'ja'
+                      ? `æœ¬æ—¥æ®‹ã‚Š ${aiVocabQuota?.remaining ?? 0}/5`
+                      : `今日剩餘 ${aiVocabQuota?.remaining ?? 0}/5`}
+                </span>
+                </>
+              ) : null}
+              </>
+            ) : null}
+            {initialMusic?.id ? (
+              <button
+                type="button"
+                onClick={openLyricsEditor}
+                className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                {flowLabels.lyricsFlow}
+              </button>
+            ) : null}
+            {initialMusic?.id && lyrics.length > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/${initialLocale}/music/timeline/${initialMusic.id}?from=${basePath}`,
+                  )
+                }
+                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand"
+              >
+                {flowLabels.timelineFlow}
+              </button>
+            ) : null}
+            {translationEditorLocales.map((locale) => (
               <button
                 key={locale}
                 type="button"
@@ -1481,8 +1572,8 @@ export function AdminMusicForm({
                         <span
                           className={`rounded-full px-2.5 py-1 font-medium ${
                             hasTranslation
-                              ? 'border border-border bg-white text-muted dark:bg-white'
-                              : 'border border-red-300 bg-white text-red-600 dark:bg-white'
+                              ? 'border border-border bg-surface-strong text-muted'
+                              : 'border border-red-300 bg-surface-strong text-red-600 dark:text-red-300'
                           }`}
                         >
                           {hasTranslation
@@ -1545,7 +1636,7 @@ export function AdminMusicForm({
                               addVocabButtonPointerDownRef.current = false
                             }}
                             disabled={isAddingVocab}
-                            className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold transition hover:border-brand disabled:cursor-wait disabled:opacity-70"
+                            className="rounded-full border border-border bg-surface-strong px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand disabled:cursor-wait disabled:opacity-70"
                           >
                             {isAddingVocab
                               ? uiLabels.addingVocab
@@ -1619,7 +1710,7 @@ export function AdminMusicForm({
                                   ),
                                 )
                               }
-                              className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-600 transition hover:border-red-300"
+                              className="rounded-full border border-red-200 bg-surface px-3 py-1 text-xs font-semibold text-red-600 transition hover:border-red-300 dark:text-red-300"
                             >
                               {uiLabels.delete}
                             </button>
@@ -1637,7 +1728,7 @@ export function AdminMusicForm({
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               />
                             </FormField>
 
@@ -1656,7 +1747,7 @@ export function AdminMusicForm({
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               />
                             </FormField>
 
@@ -1671,22 +1762,21 @@ export function AdminMusicForm({
                                       entry.id === vocab.id
                                         ? {
                                             ...entry,
-                                            difficulty:
-                                              event.target
-                                                .value as VocabDifficulty,
+                                            difficulty: event.target
+                                              .value as VocabDifficulty,
                                           }
                                         : entry,
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               >
                                 {vocabDifficultyOptions.map((difficulty) => (
                                   <option key={difficulty} value={difficulty}>
                                     {
-                                      vocabDifficultyLabels[
-                                        translationLocale
-                                      ][difficulty]
+                                      vocabDifficultyLabels[translationLocale][
+                                        difficulty
+                                      ]
                                     }
                                   </option>
                                 ))}
@@ -1714,7 +1804,7 @@ export function AdminMusicForm({
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               />
                             </FormField>
 
@@ -1733,7 +1823,7 @@ export function AdminMusicForm({
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               />
                             </FormField>
 
@@ -1761,7 +1851,7 @@ export function AdminMusicForm({
                                     ),
                                   )
                                 }
-                                className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-zinc-900 outline-none"
+                                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none"
                               />
                             </FormField>
                           </div>
@@ -1802,26 +1892,54 @@ export function AdminMusicForm({
             ? '...'
             : dict.labels.saveDraft}
         </button>
-        <button
-          type="button"
-          onClick={addVocabsFromAi}
-          disabled={isPending || isGettingAiVocabs || lyrics.length === 0}
-          className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
-        >
-          {isGettingAiVocabs
-            ? '...'
-            : initialLocale === 'en'
-              ? 'Get Vocab By AI'
-              : initialLocale === 'ja'
-                ? 'AIで単語を取得'
-                : 'Get Vocab By AI'}
-        </button>
+        {false ? (
+          <>
+            <button
+              type="button"
+              onClick={addVocabsFromAi}
+              disabled={isPending || isGettingAiVocabs || lyrics.length === 0}
+              className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+            >
+              {isGettingAiVocabs
+                ? '...'
+                : initialLocale === 'en'
+                  ? 'Get Vocab By AI'
+                  : initialLocale === 'ja'
+                    ? 'AIで単語を取得'
+                    : 'Get Vocab By AI'}
+            </button>
+            {initialMusic?.id ? (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/${initialLocale}/music/lyrics/${initialMusic!.id}?from=${basePath}`,
+                  )
+                }
+                className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                {flowLabels.lyricsFlow}
+              </button>
+            ) : null}
+            {initialMusic?.id && lyrics.length > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/${initialLocale}/music/timeline/${initialMusic!.id}?from=${basePath}`,
+                  )
+                }
+                className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand"
+              >
+                {flowLabels.timelineFlow}
+              </button>
+            ) : null}
+          </>
+        ) : null}
         {canPreview && initialMusic?.id ? (
           <button
             type="button"
-            onClick={() =>
-              router.push(`/${initialLocale}/music/preview/${initialMusic.id}`)
-            }
+            onClick={saveAndOpenPreview}
             className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand"
           >
             {flowLabels.preview}
@@ -1843,14 +1961,14 @@ export function AdminMusicForm({
                   : '完成'}
           </button>
         ) : null}
-        {canPublish ? (
+        {canShowPublishButton ? (
           <button
             type="button"
             onClick={() =>
               persistMusic(!isPublished, isPublished ? 'unpublish' : 'publish')
             }
             disabled={isPending}
-            className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
+            className="rounded-full border border-border bg-surface-strong px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
           >
             {isPending && submitAction !== 'draft'
               ? '...'

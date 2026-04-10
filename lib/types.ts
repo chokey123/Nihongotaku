@@ -29,6 +29,13 @@ export interface AIMusicVocabSuggestion {
   exampleTranslationZh: string;
 }
 
+export interface AIMusicVocabQuota {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  isAdmin: boolean;
+}
+
 export interface MusicQuizQuestion {
   key: string;
   word: string;

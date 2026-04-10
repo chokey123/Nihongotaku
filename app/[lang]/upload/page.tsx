@@ -43,7 +43,7 @@ export default async function UploadPage({
               {dict.pages.uploadArticleLibraryDescription}
             </p>
           </Link> */}
-          <Link
+          {/* <Link
             href={`/${lang}/upload/quiz`}
             className="glass-panel rounded-[32px] border border-border p-6 transition hover:-translate-y-1 hover:border-brand"
           >
@@ -54,7 +54,7 @@ export default async function UploadPage({
             <p className="mt-3 text-muted">
               {dict.pages.uploadQuizLibraryDescription}
             </p>
-          </Link>
+          </Link> */}
         </div>
       </AuthenticatedGuard>
     </div>

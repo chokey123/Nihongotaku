@@ -17,11 +17,12 @@ export function AuthFormCard({
   dict: Dictionary
 }) {
   const router = useRouter()
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, requestPasswordReset } = useAuth()
   const [isPending, startTransition] = useTransition()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const isMounted = useSyncExternalStore(
@@ -31,6 +32,32 @@ export function AuthFormCard({
   )
 
   const isLogin = mode === 'login'
+  const copy = {
+    forgot:
+      locale === 'en'
+        ? 'Forgot password?'
+        : locale === 'ja'
+          ? 'パスワードをお忘れですか？'
+          : '忘記密碼？',
+    show:
+      locale === 'en'
+        ? 'Show'
+        : locale === 'ja'
+          ? '表示'
+          : '顯示',
+    hide:
+      locale === 'en'
+        ? 'Hide'
+        : locale === 'ja'
+          ? '隱藏'
+          : '隱藏',
+    resetSent:
+      locale === 'en'
+        ? 'Password reset email sent. Please check your inbox.'
+        : locale === 'ja'
+          ? 'パスワード再設定メールを送信しました。'
+          : '重設密碼信件已寄出，請檢查信箱。',
+  }
 
   if (!isMounted) {
     return (
@@ -129,16 +156,55 @@ export function AuthFormCard({
 
           <label className="block space-y-2 text-sm">
             <span className="font-medium text-muted">{dict.labels.password}</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              suppressHydrationWarning
-              className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none transition focus:border-brand"
-              required
-              minLength={6}
-            />
+            <div className="flex overflow-hidden rounded-2xl border border-border bg-surface">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                suppressHydrationWarning
+                className="w-full bg-transparent px-4 py-3 outline-none transition focus:border-brand"
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                className="px-4 text-sm font-semibold text-muted transition hover:text-brand-strong"
+              >
+                {showPassword ? copy.hide : copy.show}
+              </button>
+            </div>
           </label>
+
+          {isLogin ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setError('')
+                  setStatus('')
+
+                  startTransition(async () => {
+                    if (!email.trim()) {
+                      router.push(`/${locale}/reset-password`)
+                      return
+                    }
+
+                    const result = await requestPasswordReset(email, locale)
+                    if (result.error) {
+                      setError(result.error)
+                      return
+                    }
+
+                    setStatus(copy.resetSent)
+                  })
+                }}
+                className="text-sm font-semibold text-brand-strong transition hover:opacity-80"
+              >
+                {copy.forgot}
+              </button>
+            </div>
+          ) : null}
 
           <button
             type="submit"

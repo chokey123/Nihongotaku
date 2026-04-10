@@ -326,6 +326,31 @@ function formatTimeLabel(atMs: number) {
   return `${minutes}:${seconds}`
 }
 
+function normalizeUniqueLyricTimings<T extends {
+  atMs: number
+  timeLabel: string
+}>(
+  lyrics: T[],
+) {
+  const usedTimings = new Set<number>()
+
+  return lyrics.map((line) => {
+    let nextAtMs = Math.max(0, Math.floor(line.atMs))
+
+    while (usedTimings.has(nextAtMs)) {
+      nextAtMs += 1
+    }
+
+    usedTimings.add(nextAtMs)
+
+    return {
+      ...line,
+      atMs: nextAtMs,
+      timeLabel: formatTimeLabel(nextAtMs),
+    }
+  })
+}
+
 function extractYoutubeId(sourceUrl: string) {
   const normalized = sourceUrl.trim()
 
@@ -806,17 +831,19 @@ export class BackendService {
     const youtubeId = extractYoutubeId(payload.sourceUrl)
 
     const normalizedLineIds = new Map<string, string>()
-    const normalizedLyrics = payload.lyrics.map((line, index) => {
-      const nextId = isUuid(line.id) ? line.id : crypto.randomUUID()
-      normalizedLineIds.set(line.id, nextId)
+    const normalizedLyrics = normalizeUniqueLyricTimings(
+      payload.lyrics.map((line, index) => {
+        const nextId = isUuid(line.id) ? line.id : crypto.randomUUID()
+        normalizedLineIds.set(line.id, nextId)
 
-      return {
-        ...line,
-        id: nextId,
-        timeLabel: line.timeLabel || formatTimeLabel(line.atMs),
-        seqNo: index,
-      }
-    })
+        return {
+          ...line,
+          id: nextId,
+          timeLabel: line.timeLabel || formatTimeLabel(line.atMs),
+          seqNo: index,
+        }
+      }),
+    )
 
     const normalizedVocab = payload.vocab.map((entry, index) => ({
       ...entry,
@@ -1726,6 +1753,39 @@ export class BackendService {
     await this.assertMusicSourceUrlIsUnique(normalizedPayload.url)
 
     const actorId = hasSupabaseConfig ? await getCurrentActorId() : null
+    if (hasSupabaseConfig && !actorId) {
+      const response = await fetch('/api/wish-submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(normalizedPayload),
+      })
+
+      const result = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean
+            id?: string
+            musicId?: string
+            message?: string
+            error?: string
+          }
+        | null
+
+      if (!response.ok) {
+        throw new Error(result?.error ?? 'Failed to submit wish.')
+      }
+
+      return {
+        ok: true,
+        id: result?.id,
+        musicId: result?.musicId,
+        message:
+          result?.message ??
+          `Wish submitted for ${normalizedPayload.artist} - ${normalizedPayload.title}`,
+      }
+    }
+
     const draftResponse = actorId
       ? await this.createMusic(
           {

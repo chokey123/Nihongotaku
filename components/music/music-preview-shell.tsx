@@ -70,7 +70,7 @@ export function MusicPreviewShell({
       return
     }
 
-    if (!user || user.role !== 'admin') {
+    if (!user) {
       router.replace(`/${locale}/home`)
       return
     }
@@ -87,9 +87,11 @@ export function MusicPreviewShell({
           return
         }
 
-        if (!item.isPublished && item.createdBy && item.createdBy !== user.id) {
-          router.replace(`/${locale}/home`)
-          return
+        if (!item.isPublished) {
+          if (!item.createdBy || item.createdBy !== user.id) {
+            router.replace(`/${locale}/home`)
+            return
+          }
         }
 
         setMusic(item)
@@ -136,7 +138,7 @@ export function MusicPreviewShell({
           <h1 className="font-heading text-2xl font-bold">{labels.previewTitle}</h1>
           <p className="mt-1 text-sm text-muted">{labels.previewHint}</p>
         </div>
-        {!music.isPublished && user?.role === 'admin' ? (
+        {!music.isPublished ? (
           <button
             type="button"
             onClick={() =>

@@ -5,6 +5,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
+import {
+  AutocompleteInput,
+  type AutocompleteOption,
+} from '@/components/ui/autocomplete-input'
 import type { MusicItem } from '@/lib/types'
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 import { backendService } from '@/lib/services/backend-service'
@@ -71,58 +75,58 @@ function AdminMusicLibraryCard({
         </div>
       ) : null}
       <Link href={href} className="flex flex-col overflow-hidden">
-      <div className="relative h-48 overflow-hidden">
-        {thumbnailUrl ? (
-          <>
-            <Image
-              src={thumbnailUrl}
-              alt={`${item.title} thumbnail`}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-          </>
-        ) : (
-          <>
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(135deg, ${item.palette.from}, ${item.palette.to})`,
-              }}
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.35),transparent_28%)]" />
-          </>
-        )}
-        <div className="absolute bottom-4 left-4 rounded-full bg-white/28 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-          {item.thumbnailLabel}
+        <div className="relative h-48 overflow-hidden">
+          {thumbnailUrl ? (
+            <>
+              <Image
+                src={thumbnailUrl}
+                alt={`${item.title} thumbnail`}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+            </>
+          ) : (
+            <>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(135deg, ${item.palette.from}, ${item.palette.to})`,
+                }}
+              />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.35),transparent_28%)]" />
+            </>
+          )}
+          <div className="absolute bottom-4 left-4 rounded-full bg-white/28 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+            {item.thumbnailLabel}
+          </div>
+          {mode === 'quiz' ? (
+            <div className="absolute right-4 top-4 rounded-full bg-white/24 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              {item.quizVocabKeys.length} {quizLabel}
+            </div>
+          ) : (
+            <div className="absolute right-4 top-4 rounded-full bg-white/24 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              {item.isPublished ? publishedLabel : draftLabel}
+            </div>
+          )}
         </div>
-        {mode === 'quiz' ? (
-          <div className="absolute right-4 top-4 rounded-full bg-white/24 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-            {item.quizVocabKeys.length} {quizLabel}
+        <div className="space-y-2 p-4">
+          <p className="text-sm font-medium text-muted">{item.artist}</p>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-heading text-xl font-bold tracking-tight">
+              {item.title}
+            </h3>
+            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
+              {item.genre}
+            </span>
           </div>
-        ) : (
-          <div className="absolute right-4 top-4 rounded-full bg-white/24 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-            {item.isPublished ? publishedLabel : draftLabel}
-          </div>
-        )}
-      </div>
-      <div className="space-y-2 p-4">
-        <p className="text-sm font-medium text-muted">{item.artist}</p>
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-heading text-xl font-bold tracking-tight">
-            {item.title}
-          </h3>
-          <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
-            {item.genre}
-          </span>
+          {mode === 'music' ? (
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-muted">{sourceLabel}</p>
+            </div>
+          ) : null}
         </div>
-        {mode === 'music' ? (
-          <div className="space-y-1.5 text-xs">
-            <p className="font-semibold text-muted">{sourceLabel}</p>
-          </div>
-        ) : null}
-      </div>
       </Link>
     </div>
   )
@@ -164,7 +168,6 @@ export function AdminMusicLibrary({
   const router = useRouter()
   const [draftQuery, setDraftQuery] = useState('')
   const [query, setQuery] = useState('')
-  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
   const [selectedSource, setSelectedSource] = useState<
     'all' | 'wish' | 'upload' | 'admin'
   >('all')
@@ -174,20 +177,26 @@ export function AdminMusicLibrary({
   const [showUploadNotice, setShowUploadNotice] = useState(false)
   const [itemsState, setItemsState] = useState(items)
   const [statusMessage, setStatusMessage] = useState('')
-  const [pendingDeleteItem, setPendingDeleteItem] = useState<MusicItem | null>(null)
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<MusicItem | null>(
+    null,
+  )
   const [isDeleting, setIsDeleting] = useState(false)
+  const searchSuggestionArtistLabel =
+    locale === 'en' ? 'Artist' : locale === 'ja' ? 'Artist' : '歌手'
+  const searchSuggestionSongLabel =
+    locale === 'en' ? 'Song' : locale === 'ja' ? 'Song' : '歌曲'
 
   useEffect(() => {
     setItemsState(items)
   }, [items])
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<AutocompleteOption[]>(() => {
     const keyword = draftQuery.trim().toLowerCase()
     if (!keyword) {
       return []
     }
 
-    const unique = new Map<string, { label: string; type: 'artist' | 'song' }>()
+    const unique = new Map<string, AutocompleteOption>()
 
     for (const item of itemsState) {
       if (
@@ -195,8 +204,9 @@ export function AdminMusicLibrary({
         !unique.has(`artist:${item.artist}`)
       ) {
         unique.set(`artist:${item.artist}`, {
-          label: item.artist,
-          type: 'artist',
+          key: `artist:${item.artist}`,
+          value: item.artist,
+          meta: searchSuggestionArtistLabel,
         })
       }
 
@@ -205,26 +215,33 @@ export function AdminMusicLibrary({
         !unique.has(`song:${item.title}`)
       ) {
         unique.set(`song:${item.title}`, {
-          label: item.title,
-          type: 'song',
+          key: `song:${item.title}`,
+          value: item.title,
+          meta: searchSuggestionSongLabel,
         })
       }
 
-      if (unique.size >= 8) {
+      if (unique.size >= 5) {
         break
       }
     }
 
     return [...unique.values()]
-  }, [draftQuery, itemsState])
+  }, [
+    draftQuery,
+    itemsState,
+    searchSuggestionArtistLabel,
+    searchSuggestionSongLabel,
+  ])
 
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    return itemsState.filter((item) =>
-      [item.title, item.artist, item.genre].some((value) =>
-        value.toLowerCase().includes(keyword),
-      ),
-    )
+    return itemsState
+      .filter((item) =>
+        [item.title, item.artist, item.genre].some((value) =>
+          value.toLowerCase().includes(keyword),
+        ),
+      )
       .filter((item) => {
         if (selectedSource === 'all') {
           return true
@@ -257,15 +274,34 @@ export function AdminMusicLibrary({
   }, [itemsState, query, selectedPublishState, selectedSource])
 
   const sourceFilterLabel =
-    locale === 'en' ? 'Source filter' : locale === 'ja' ? '作成元絞り込み' : '來源篩選'
+    locale === 'en'
+      ? 'Source filter'
+      : locale === 'ja'
+        ? '作成元絞り込み'
+        : '來源篩選'
   const publishFilterLabel =
-    locale === 'en' ? 'Status filter' : locale === 'ja' ? '公開状態絞り込み' : '狀態篩選'
+    locale === 'en'
+      ? 'Status filter'
+      : locale === 'ja'
+        ? '公開状態絞り込み'
+        : '狀態篩選'
   const clearFiltersLabel =
-    locale === 'en' ? 'Clear filters' : locale === 'ja' ? '絞り込み解除' : '清除篩選'
+    locale === 'en'
+      ? 'Clear filters'
+      : locale === 'ja'
+        ? '絞り込み解除'
+        : '清除篩選'
   const suggestionArtistLabel =
-    locale === 'en' ? 'Artist' : locale === 'ja' ? 'ã‚¢ãƒ¼ãƒ†ã‚£ã‚¹ãƒˆ' : 'æ­Œæ‰‹'
+    locale === 'en'
+      ? 'Artist'
+      : locale === 'ja'
+        ? 'ã‚¢ãƒ¼ãƒ†ã‚£ã‚¹ãƒˆ'
+        : 'æ­Œæ‰‹'
   const suggestionSongLabel =
     locale === 'en' ? 'Song' : locale === 'ja' ? 'æ¥½æ›²' : 'æ­Œæ›²'
+  void suggestionArtistLabel
+  void suggestionSongLabel
+
   const sourceOptions = [
     {
       key: 'wish' as const,
@@ -274,12 +310,20 @@ export function AdminMusicLibrary({
     {
       key: 'upload' as const,
       label:
-        locale === 'en' ? 'User upload' : locale === 'ja' ? 'ユーザー投稿' : '使用者上傳',
+        locale === 'en'
+          ? 'User upload'
+          : locale === 'ja'
+            ? 'ユーザー投稿'
+            : '使用者上傳',
     },
     {
       key: 'admin' as const,
       label:
-        locale === 'en' ? 'Admin created' : locale === 'ja' ? '管理者建立' : '管理員建立',
+        locale === 'en'
+          ? 'Admin created'
+          : locale === 'ja'
+            ? '管理者建立'
+            : '管理員建立',
     },
   ]
   const publishOptions = [
@@ -298,58 +342,27 @@ export function AdminMusicLibrary({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-2xl">
           <form
-            className="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
             onSubmit={(event) => {
               event.preventDefault()
               setQuery(draftQuery)
-              setIsSuggestionOpen(false)
             }}
           >
-            <input
+            <AutocompleteInput
               value={draftQuery}
-              onChange={(event) => {
-                setDraftQuery(event.target.value)
-                setIsSuggestionOpen(true)
-              }}
+              onValueChange={setDraftQuery}
+              suggestions={suggestions}
               placeholder={searchPlaceholder}
-              onFocus={() => {
-                if (suggestions.length > 0) {
-                  setIsSuggestionOpen(true)
-                }
+              onSelect={(option) => {
+                setDraftQuery(option.value)
+                setQuery(option.value)
               }}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsSuggestionOpen(false)
-                }, 120)
+              onCommit={(nextValue) => {
+                setQuery(nextValue)
               }}
-              className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
+              wrapperClassName="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
+              inputClassName="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
             />
           </form>
-
-          {isSuggestionOpen && suggestions.length > 0 ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={`${suggestion.type}:${suggestion.label}`}
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    setDraftQuery(suggestion.label)
-                    setQuery(suggestion.label)
-                    setIsSuggestionOpen(false)
-                  }}
-                  className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-left text-sm transition hover:bg-brand-soft/40 last:border-b-0"
-                >
-                  <span className="font-medium text-foreground">{suggestion.label}</span>
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                    {suggestion.type === 'artist'
-                      ? suggestionArtistLabel
-                      : suggestionSongLabel}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
         {mode === 'music' ? (
           <button
@@ -371,35 +384,37 @@ export function AdminMusicLibrary({
 
       {mode === 'music' ? (
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
-            <div className="pt-2 text-sm font-semibold text-muted">
-              {sourceFilterLabel}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sourceOptions.map((option) => {
-                const isActive = selectedSource === option.key
+          {basePath === 'admin' ? (
+            <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
+              <div className="pt-2 text-sm font-semibold text-muted">
+                {sourceFilterLabel}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sourceOptions.map((option) => {
+                  const isActive = selectedSource === option.key
 
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() =>
-                      setSelectedSource((current) =>
-                        current === option.key ? 'all' : option.key,
-                      )
-                    }
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      isActive
-                        ? 'border-brand bg-brand-soft text-brand-strong'
-                        : 'border-border bg-surface text-muted hover:border-brand hover:text-brand-strong'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                )
-              })}
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() =>
+                        setSelectedSource((current) =>
+                          current === option.key ? 'all' : option.key,
+                        )
+                      }
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? 'border-brand bg-brand-soft text-brand-strong'
+                          : 'border-border bg-surface text-muted hover:border-brand hover:text-brand-strong'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
             <div className="pt-2 text-sm font-semibold text-muted">
@@ -431,7 +446,7 @@ export function AdminMusicLibrary({
             </div>
           </div>
 
-          {(selectedSource !== 'all' || selectedPublishState !== 'all') ? (
+          {selectedSource !== 'all' || selectedPublishState !== 'all' ? (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -465,7 +480,9 @@ export function AdminMusicLibrary({
               quizLabel={quizLabel}
               publishedLabel={publishedLabel}
               draftLabel={draftLabel}
-              showDeleteButton={allowDelete && mode === 'music' && !item.isPublished}
+              showDeleteButton={
+                allowDelete && mode === 'music' && !item.isPublished
+              }
               deleteLabel={deleteLabel}
               onDelete={async (target) => {
                 setPendingDeleteItem(target)
@@ -493,31 +510,31 @@ export function AdminMusicLibrary({
             <div className="mt-4 space-y-3 text-sm text-muted">
               <p>
                 {locale === 'en'
-                  ? '1. To ensure quality, every upload must be reviewed by an administrator before it can be published.'
+                  ? '1. You can publish your own song once the content is ready.'
                   : locale === 'ja'
                     ? '1. 品質を保つため、すべての投稿は公開前に管理者の審査が必要です。'
-                    : '1. 為確保內容品質，所有投稿都需經管理員審核後才能發佈。'}
+                    : '1. 发布前请自行确认歌词、时间轴、单词内容准确；'}
               </p>
               <p>
                 {locale === 'en'
-                  ? '2. After upload, you have a 7-day priority editing window. If the lyrics and vocab are still incomplete after that, an administrator may help finish and publish the content.'
+                  ? '2. Please make sure the lyrics, timeline, and vocab are accurate before publishing.'
                   : locale === 'ja'
                     ? '2. 投稿後 7 日間は投稿者が優先して編集できます。期間を過ぎても歌詞や単語が未完成の場合、管理者が補完して公開することがあります。'
                     : '2. 歌曲上傳後，你有 7 天的優先編輯權；若超過期限且歌詞與單字內容仍未完善，管理員可能會協助完善並發佈。'}
               </p>
               <p>
                 {locale === 'en'
-                  ? '3. When the lyrics and vocab are ready, click "Complete" so administrators can prioritize review and publication.'
+                  ? '3. Administrators may unpublish or delete content if it is inappropriate, misleading, or clearly incorrect.'
                   : locale === 'ja'
                     ? '3. 歌詞と単語の内容が整ったら「完成」を押してください。管理者が優先して審査・公開します。'
-                    : '3. 當你確認歌詞與單字內容完成後，可以點擊「完成」按鍵，管理員會優先審核並發佈。'}
+                    : '3. 在你的上傳發佈前后, 管理员如果判断内容不当、误导或明显有误，仍可撤下或删除。'}
               </p>
               <p>
                 {locale === 'en'
-                  ? '4. Published content can no longer be edited by regular users.'
+                  ? '4. You can continue updating your own song after publishing if you need to fix or improve it.'
                   : locale === 'ja'
                     ? '4. 公開後の内容は一般ユーザーは編集できません。'
-                    : '4. 發佈後的內容將不可再被修改。'}
+                    : ''}
               </p>
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -580,7 +597,9 @@ export function AdminMusicLibrary({
                     .deleteMusic(pendingDeleteItem.id)
                     .then(() => {
                       setItemsState((current) =>
-                        current.filter((item) => item.id !== pendingDeleteItem.id),
+                        current.filter(
+                          (item) => item.id !== pendingDeleteItem.id,
+                        ),
                       )
                       setStatusMessage(
                         locale === 'en'
