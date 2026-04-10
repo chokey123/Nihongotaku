@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+  ResizableNodeView,
+  type ResizableNodeViewDirection,
+} from "@tiptap/core";
 
 import Image from "@tiptap/extension-image";
 import StarterKit from "@tiptap/starter-kit";
@@ -15,6 +19,7 @@ import {
 
 const resizableImageOptions = {
   enabled: true,
+  directions: ["bottom-right"] as ResizableNodeViewDirection[],
   minWidth: 120,
   minHeight: 80,
   alwaysPreserveAspectRatio: true,
@@ -35,41 +40,94 @@ const ArticleImage = Image.extend({
   },
 
   addNodeView() {
-    const parentNodeView = this.parent?.();
-
-    if (!parentNodeView) {
+    if (!this.options.resize || !this.options.resize.enabled || typeof document === "undefined") {
       return null;
     }
 
-    return (...args) => {
-      const nodeView = parentNodeView(...args);
+    const { directions, minWidth, minHeight, alwaysPreserveAspectRatio } = this.options.resize;
 
-      if (!nodeView) {
-        return nodeView;
-      }
+    return ({ node, getPos, HTMLAttributes, editor }) => {
+      const element = document.createElement("img");
 
-      const applyAlign = (align: string | null | undefined) => {
-        nodeView.dom.setAttribute("data-image-align", align || "center");
-      };
+      Object.entries(HTMLAttributes).forEach(([key, value]) => {
+        if (value == null || key === "width" || key === "height") {
+          return;
+        }
 
-      applyAlign(args[0].node.attrs.align as string | undefined);
+        element.setAttribute(key, String(value));
+      });
 
-      const originalUpdate = nodeView.update?.bind(nodeView);
+      element.src = String(HTMLAttributes.src ?? "");
 
-      return {
-        ...nodeView,
-        update(updatedNode, decorations, innerDecorations) {
-          const result = originalUpdate
-            ? originalUpdate(updatedNode, decorations, innerDecorations)
-            : true;
-
-          if (result) {
-            applyAlign(updatedNode.attrs.align as string | undefined);
+      const nodeView = new ResizableNodeView({
+        element,
+        editor,
+        node,
+        getPos,
+        onResize: (width, height) => {
+          element.style.width = `${width}px`;
+          element.style.height = `${height}px`;
+        },
+        onCommit: (width, height) => {
+          const pos = getPos();
+          if (pos === undefined) {
+            return;
           }
 
-          return result;
+          this.editor
+            .chain()
+            .setNodeSelection(pos)
+            .updateAttributes(this.name, {
+              width,
+              height,
+            })
+            .run();
         },
+        onUpdate: (updatedNode) => {
+          if (updatedNode.type !== node.type) {
+            return false;
+          }
+
+          const align = (updatedNode.attrs.align as string | undefined) ?? "center";
+          nodeView.dom.setAttribute("data-image-align", align);
+          element.setAttribute("data-align", align);
+
+          return true;
+        },
+        options: {
+          directions,
+          min: {
+            width: minWidth,
+            height: minHeight,
+          },
+          preserveAspectRatio: alwaysPreserveAspectRatio === true,
+          createCustomHandle: (direction) => {
+            const handle = document.createElement("div");
+            handle.dataset.resizeHandle = direction;
+            handle.style.position = "absolute";
+            handle.style.right = "0";
+            handle.style.bottom = "0";
+            handle.style.transform = "translate(40%, 40%)";
+            handle.style.width = "22px";
+            handle.style.height = "22px";
+            handle.style.cursor = "nwse-resize";
+            return handle;
+          },
+        },
+      });
+
+      const align = (node.attrs.align as string | undefined) ?? "center";
+      nodeView.dom.setAttribute("data-image-align", align);
+      element.setAttribute("data-align", align);
+
+      nodeView.dom.style.visibility = "hidden";
+      nodeView.dom.style.pointerEvents = "none";
+      element.onload = () => {
+        nodeView.dom.style.visibility = "";
+        nodeView.dom.style.pointerEvents = "";
       };
+
+      return nodeView;
     };
   },
 });

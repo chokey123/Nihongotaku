@@ -3,6 +3,10 @@
 import { useMemo, useState } from 'react'
 
 import { MusicCard } from '@/components/ui/music-card'
+import {
+  AutocompleteInput,
+  type AutocompleteOption,
+} from '@/components/ui/autocomplete-input'
 import { SectionHeading } from '@/components/ui/section-heading'
 import type { MusicItem } from '@/lib/types'
 
@@ -72,7 +76,26 @@ function buildTopFilters(values: string[]) {
         return right[1] - left[1]
       }
 
-      return left[0].localeCompare(right[0])
+      const leftKey = normalizeText(left[0])
+      const rightKey = normalizeText(right[0])
+
+      if (leftKey < rightKey) {
+        return -1
+      }
+
+      if (leftKey > rightKey) {
+        return 1
+      }
+
+      if (left[0] < right[0]) {
+        return -1
+      }
+
+      if (left[0] > right[0]) {
+        return 1
+      }
+
+      return 0
     })
     .slice(0, 5)
     .map(([value, count]) => ({ value, count }))
@@ -99,11 +122,15 @@ export function HomePageShell({
   const locale: SupportedLocale =
     lang === 'zh' || lang === 'en' || lang === 'ja' ? lang : 'zh'
   const copy = homeShellCopy[locale]
+  const appliedFilterLabels = {
+    search: locale === 'en' ? 'Search' : locale === 'ja' ? '検索' : '搜尋',
+    artist: locale === 'en' ? 'Artist' : locale === 'ja' ? 'アーティスト' : '歌手',
+    genre: locale === 'en' ? 'Genre' : locale === 'ja' ? 'ジャンル' : '曲風',
+  }
   const [draftQuery, setDraftQuery] = useState('')
   const [query, setQuery] = useState('')
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null)
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null)
-  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
 
   const topArtists = useMemo(
     () => buildTopFilters(music.map((item) => item.artist)),
@@ -114,13 +141,13 @@ export function HomePageShell({
     [music],
   )
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<AutocompleteOption[]>(() => {
     const keyword = normalizeText(draftQuery)
     if (!keyword) {
       return []
     }
 
-    const unique = new Map<string, { label: string; type: 'artist' | 'song' }>()
+    const unique = new Map<string, AutocompleteOption>()
 
     for (const item of music) {
       if (
@@ -128,8 +155,9 @@ export function HomePageShell({
         !unique.has(`artist:${item.artist}`)
       ) {
         unique.set(`artist:${item.artist}`, {
-          label: item.artist,
-          type: 'artist',
+          key: `artist:${item.artist}`,
+          value: item.artist,
+          meta: copy.suggestionArtist,
         })
       }
 
@@ -138,18 +166,19 @@ export function HomePageShell({
         !unique.has(`song:${item.title}`)
       ) {
         unique.set(`song:${item.title}`, {
-          label: item.title,
-          type: 'song',
+          key: `song:${item.title}`,
+          value: item.title,
+          meta: copy.suggestionSong,
         })
       }
 
-      if (unique.size >= 8) {
+      if (unique.size >= 5) {
         break
       }
     }
 
     return [...unique.values()]
-  }, [draftQuery, music])
+  }, [copy.suggestionArtist, copy.suggestionSong, draftQuery, music])
 
   const filteredMusic = useMemo(() => {
     const keyword = normalizeText(query)
@@ -170,6 +199,24 @@ export function HomePageShell({
     })
   }, [music, query, selectedArtist, selectedGenre])
 
+  const appliedFilters = useMemo(
+    () =>
+      [
+        query
+          ? { label: appliedFilterLabels.search, value: query.trim() }
+          : null,
+        selectedArtist
+          ? { label: appliedFilterLabels.artist, value: selectedArtist }
+          : null,
+        selectedGenre
+          ? { label: appliedFilterLabels.genre, value: selectedGenre }
+          : null,
+      ].filter((entry): entry is { label: string; value: string } =>
+        Boolean(entry?.value),
+      ),
+    [appliedFilterLabels.artist, appliedFilterLabels.genre, appliedFilterLabels.search, query, selectedArtist, selectedGenre],
+  )
+
   return (
     <div className="space-y-10 pb-10">
       <section className="glass-panel relative overflow-hidden rounded-[36px] border border-border px-6 py-10 sm:px-10">
@@ -185,67 +232,51 @@ export function HomePageShell({
       <section className="space-y-5 px-1 sm:px-0">
         <div className="relative">
           <form
-            className="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
             onSubmit={(event) => {
               event.preventDefault()
               setQuery(draftQuery)
-              setIsSuggestionOpen(false)
             }}
           >
-            <input
+            <AutocompleteInput
               type="search"
               value={draftQuery}
+              suggestions={suggestions}
               placeholder={copy.searchPlaceholder}
               suppressHydrationWarning
-              onChange={(event) => {
-                setDraftQuery(event.target.value)
-                setIsSuggestionOpen(true)
+              onValueChange={setDraftQuery}
+              onSelect={(option) => {
+                setDraftQuery(option.value)
+                setQuery(option.value)
               }}
-              onFocus={() => {
-                if (suggestions.length > 0) {
-                  setIsSuggestionOpen(true)
-                }
+              onCommit={(nextValue) => {
+                setQuery(nextValue)
               }}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsSuggestionOpen(false)
-                }, 120)
-              }}
-              className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
-            />
-            <button
-              type="submit"
-              className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white"
-            >
-              {copy.searchButton}
-            </button>
-          </form>
-
-          {isSuggestionOpen && suggestions.length > 0 ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl">
-              {suggestions.map((suggestion) => (
+              wrapperClassName="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
+              inputClassName="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
+              trailing={
                 <button
-                  key={`${suggestion.type}:${suggestion.label}`}
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    setDraftQuery(suggestion.label)
-                    setQuery(suggestion.label)
-                    setIsSuggestionOpen(false)
-                  }}
-                  className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-4 py-3 text-left text-sm transition hover:bg-brand-soft/40 last:border-b-0"
+                  type="submit"
+                  className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white"
                 >
-                  <span className="font-medium text-foreground">{suggestion.label}</span>
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                    {suggestion.type === 'artist'
-                      ? copy.suggestionArtist
-                      : copy.suggestionSong}
-                  </span>
+                  {copy.searchButton}
                 </button>
-              ))}
-            </div>
-          ) : null}
+              }
+            />
+          </form>
         </div>
+
+        {appliedFilters.length > 0 ? (
+          <div className="flex flex-wrap gap-2 text-xs text-muted">
+            {appliedFilters.map((filter) => (
+              <span
+                key={`${filter.label}:${filter.value}`}
+                className="rounded-full border border-border/70 bg-surface px-3 py-1"
+              >
+                {filter.label}: {filter.value}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="space-y-4 border-t border-border/70 pt-4">
           <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-start">
@@ -323,7 +354,6 @@ export function HomePageShell({
                   setQuery('')
                   setSelectedArtist(null)
                   setSelectedGenre(null)
-                  setIsSuggestionOpen(false)
                 }}
                 className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
               >

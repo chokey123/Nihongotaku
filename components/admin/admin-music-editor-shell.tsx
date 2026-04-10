@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
-import { useAuth } from '@/components/providers/auth-provider'
 import { AdminMusicForm } from '@/components/admin/admin-music-form'
+import { useAuth } from '@/components/providers/auth-provider'
 import { backendService } from '@/lib/services/backend-service'
 import type { Dictionary } from '@/lib/i18n'
 import type { Locale, MusicItem } from '@/lib/types'
@@ -26,7 +26,7 @@ export function AdminMusicEditorShell({
   const { user, isLoading } = useAuth()
   const copy = dict.status
   const [music, setMusic] = useState<MusicItem | undefined>()
-  const [status, setStatus] = useState<'loading' | 'ready' | 'not-found' | 'error' | 'locked'>(
+  const [status, setStatus] = useState<'loading' | 'ready' | 'not-found' | 'error'>(
     mode === 'edit' ? 'loading' : 'ready',
   )
 
@@ -47,6 +47,7 @@ export function AdminMusicEditorShell({
       .getMusicById(musicId, { includeUnpublished: true })
       .then((item) => {
         if (!isMounted) return
+
         if (!item) {
           setStatus('not-found')
           return
@@ -54,11 +55,6 @@ export function AdminMusicEditorShell({
 
         if (scope === 'upload' && user.role !== 'admin' && item.createdBy !== user.id) {
           setStatus('not-found')
-          return
-        }
-
-        if (scope === 'upload' && user.role !== 'admin' && item.isPublished) {
-          setStatus('locked')
           return
         }
 
@@ -77,7 +73,7 @@ export function AdminMusicEditorShell({
 
   if (isLoading || status === 'loading') {
     return (
-        <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-muted">
+      <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-muted">
         {copy.loadingMusicEntry}
       </div>
     )
@@ -85,7 +81,7 @@ export function AdminMusicEditorShell({
 
   if (status === 'not-found') {
     return (
-        <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-muted">
+      <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-muted">
         {copy.musicNotFound}
       </div>
     )
@@ -93,20 +89,8 @@ export function AdminMusicEditorShell({
 
   if (status === 'error') {
     return (
-        <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-red-600">
+      <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-red-600">
         {copy.failedMusicEntry}
-      </div>
-    )
-  }
-
-  if (status === 'locked') {
-    return (
-      <div className="glass-panel rounded-[32px] border border-border p-6 text-sm text-muted">
-        {locale === 'en'
-          ? 'This song has already been published and can no longer be edited by regular users.'
-          : locale === 'ja'
-            ? 'この楽曲はすでに公開されており、一般ユーザーは編集できません。'
-            : '這首歌曲已經發佈，一般使用者不可再修改。'}
       </div>
     )
   }
@@ -118,7 +102,7 @@ export function AdminMusicEditorShell({
       mode={mode}
       initialLocale={locale}
       basePath={basePath}
-      canPublish={user?.role === 'admin'}
+      canPublish={Boolean(user)}
     />
   )
 }

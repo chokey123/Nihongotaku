@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import {
+  AutocompleteInput,
+  type AutocompleteOption,
+} from "@/components/ui/autocomplete-input";
 import { backendService } from "@/lib/services/backend-service";
 import type { Dictionary } from "@/lib/i18n";
 
@@ -55,6 +59,41 @@ function getWishCopy(locale: string) {
   };
 }
 
+function normalizeSuggestionKeyword(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getClosestSuggestions(input: string, values: string[]) {
+  const keyword = normalizeSuggestionKeyword(input);
+
+  if (!keyword) {
+    return values.slice(0, 5);
+  }
+
+  return values
+    .filter((value) => normalizeSuggestionKeyword(value).includes(keyword))
+    .sort((left, right) => {
+      const leftNormalized = normalizeSuggestionKeyword(left);
+      const rightNormalized = normalizeSuggestionKeyword(right);
+      const leftStartsWith = leftNormalized.startsWith(keyword) ? 0 : 1;
+      const rightStartsWith = rightNormalized.startsWith(keyword) ? 0 : 1;
+
+      if (leftStartsWith !== rightStartsWith) {
+        return leftStartsWith - rightStartsWith;
+      }
+
+      const leftIndex = leftNormalized.indexOf(keyword);
+      const rightIndex = rightNormalized.indexOf(keyword);
+
+      if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+      }
+
+      return left.localeCompare(right);
+    })
+    .slice(0, 5);
+}
+
 export function WishForm({
   dict,
   locale,
@@ -62,32 +101,74 @@ export function WishForm({
   dict: Dictionary;
   locale: string;
 }) {
+  const [artist, setArtist] = useState("");
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("");
+  const [url, setUrl] = useState("");
+  const [artistSuggestions, setArtistSuggestions] = useState<string[]>([]);
+  const [genreSuggestions, setGenreSuggestions] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [isPending, startTransition] = useTransition();
   const copy = getWishCopy(locale);
+  const artistDropdownSuggestions = useMemo<AutocompleteOption[]>(
+    () =>
+      getClosestSuggestions(artist, artistSuggestions).map((value) => ({
+        key: `artist:${value}`,
+        value,
+      })),
+    [artist, artistSuggestions],
+  );
+  const genreDropdownSuggestions = useMemo<AutocompleteOption[]>(
+    () =>
+      getClosestSuggestions(genre, genreSuggestions).map((value) => ({
+        key: `genre:${value}`,
+        value,
+      })),
+    [genre, genreSuggestions],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    backendService
+      .getMusicFieldSuggestions({ includeUnpublished: true })
+      .then((suggestions) => {
+        if (!isMounted) return;
+        setArtistSuggestions(suggestions.artists);
+        setGenreSuggestions(suggestions.genres);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setArtistSuggestions([]);
+        setGenreSuggestions([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <form
       className="glass-panel flex flex-col gap-4 rounded-[32px] border border-border p-6"
+      autoComplete="off"
       onSubmit={(event) => {
         event.preventDefault();
-        const form = event.currentTarget;
-        const formData = new FormData(form);
 
         startTransition(async () => {
-          const artist = String(formData.get("artist") ?? "").trim();
-          const title = String(formData.get("title") ?? "").trim();
-          const genre = String(formData.get("genre") ?? "").trim();
-          const url = String(formData.get("url") ?? "").trim();
+          const nextArtist = artist.trim();
+          const nextTitle = title.trim();
+          const nextGenre = genre.trim();
+          const nextUrl = url.trim();
 
-          if (!artist || !title || !genre || !url) {
+          if (!nextArtist || !nextTitle || !nextGenre || !nextUrl) {
             setMessage(copy.fillAll);
             setMessageTone("error");
             return;
           }
 
-          if (!isValidYoutubeUrl(url)) {
+          if (!isValidYoutubeUrl(nextUrl)) {
             setMessage(copy.invalidYoutube);
             setMessageTone("error");
             return;
@@ -95,14 +176,17 @@ export function WishForm({
 
           try {
             await backendService.submitWish({
-              artist,
-              title,
-              genre,
-              url,
+              artist: nextArtist,
+              title: nextTitle,
+              genre: nextGenre,
+              url: nextUrl,
             });
             setMessage(copy.success);
             setMessageTone("success");
-            form.reset();
+            setArtist("");
+            setTitle("");
+            setGenre("");
+            setUrl("");
             window.dispatchEvent(new CustomEvent("nihongotaku:wish-created"));
           } catch (error) {
             setMessage(error instanceof Error ? error.message : copy.failed);
@@ -114,26 +198,45 @@ export function WishForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-2 text-sm">
           <span>{dict.labels.artist}</span>
-          <input
+          <AutocompleteInput
             name="artist"
+            autoComplete="off"
+            value={artist}
+            onValueChange={setArtist}
+            suggestions={artistDropdownSuggestions}
+            onSelect={(option) => {
+              setArtist(option.value);
+            }}
             required
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+            wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            inputClassName="w-full bg-transparent outline-none"
           />
         </label>
         <label className="space-y-2 text-sm">
           <span>{dict.labels.title}</span>
           <input
             name="title"
+            autoComplete="off"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
             required
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
         </label>
         <label className="space-y-2 text-sm">
           <span>{dict.labels.genre}</span>
-          <input
+          <AutocompleteInput
             name="genre"
+            autoComplete="off"
+            value={genre}
+            onValueChange={setGenre}
+            suggestions={genreDropdownSuggestions}
+            onSelect={(option) => {
+              setGenre(option.value);
+            }}
             required
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+            wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            inputClassName="w-full bg-transparent outline-none"
           />
         </label>
         <label className="space-y-2 text-sm">
@@ -141,6 +244,9 @@ export function WishForm({
           <input
             name="url"
             type="url"
+            autoComplete="off"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
             required
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />

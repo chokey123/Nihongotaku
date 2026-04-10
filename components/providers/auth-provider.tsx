@@ -16,6 +16,11 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  requestPasswordReset: (
+    email: string,
+    locale: string,
+  ) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     password: string,
@@ -36,6 +41,21 @@ function getEmailRedirectTo() {
 
   if (typeof window !== "undefined") {
     return `${window.location.origin}/zh/home`;
+  }
+
+  return undefined;
+}
+
+function getPasswordResetRedirectTo(locale: string) {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configuredUrl) {
+    return `${configuredUrl.replace(/\/$/, "")}/${locale}/reset-password`;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/${locale}/reset-password`;
   }
 
   return undefined;
@@ -154,6 +174,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: async (email: string, password: string) => {
         const { error } = await supabase.auth.signInWithPassword({
           email,
+          password,
+        });
+
+        return {
+          error: error?.message ?? null,
+        };
+      },
+      requestPasswordReset: async (email: string, locale: string) => {
+        const redirectTo = getPasswordResetRedirectTo(locale);
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          ...(redirectTo ? { redirectTo } : {}),
+        });
+
+        return {
+          error: error?.message ?? null,
+        };
+      },
+      updatePassword: async (password: string) => {
+        const { error } = await supabase.auth.updateUser({
           password,
         });
 
