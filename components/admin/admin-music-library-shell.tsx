@@ -93,7 +93,10 @@ export function AdminMusicLibraryShell({
       publishedLabel={publishedLabel}
       draftLabel={draftLabel}
       quizLabel={quizLabel}
-      allowDelete={scope === 'admin' && mode === 'music' && user?.role === 'admin'}
+      allowDelete={
+        mode === 'music' &&
+        ((scope === 'admin' && user?.role === 'admin') || scope === 'upload')
+      }
       deleteLabel={
         locale === 'en' ? 'Delete' : locale === 'ja' ? '削除' : '刪除'
       }

@@ -156,7 +156,12 @@ export function MusicPreviewShell({
           </button>
         ) : null}
       </div>
-      <MusicDetailClient item={music} dict={dict} locale={locale} />
+      <MusicDetailClient
+        item={music}
+        dict={dict}
+        locale={locale}
+        showQuizLink={false}
+      />
     </div>
   )
 }

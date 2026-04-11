@@ -513,28 +513,28 @@ export function AdminMusicLibrary({
                   ? '1. You can publish your own song once the content is ready.'
                   : locale === 'ja'
                     ? '1. 品質を保つため、すべての投稿は公開前に管理者の審査が必要です。'
-                    : '1. 发布前请自行确认歌词、时间轴、单词内容准确；'}
+                    : '1. 歌曲在上傳後只有你和管理員能看到你上傳了什麽歌曲，在完成歌詞，翻譯等内容後選擇“發佈”，本站的所有使用者便能瀏覽。'}
               </p>
               <p>
                 {locale === 'en'
                   ? '2. Please make sure the lyrics, timeline, and vocab are accurate before publishing.'
                   : locale === 'ja'
                     ? '2. 投稿後 7 日間は投稿者が優先して編集できます。期間を過ぎても歌詞や単語が未完成の場合、管理者が補完して公開することがあります。'
-                    : '2. 歌曲上傳後，你有 7 天的優先編輯權；若超過期限且歌詞與單字內容仍未完善，管理員可能會協助完善並發佈。'}
+                    : '2. “發佈”前请自行确认歌詞、時間軸、單詞内容准确。'}
               </p>
               <p>
                 {locale === 'en'
                   ? '3. Administrators may unpublish or delete content if it is inappropriate, misleading, or clearly incorrect.'
                   : locale === 'ja'
                     ? '3. 歌詞と単語の内容が整ったら「完成」を押してください。管理者が優先して審査・公開します。'
-                    : '3. 在你的上傳發佈前后, 管理员如果判断内容不当、误导或明显有误，仍可撤下或删除。'}
+                    : '3. 歌曲上傳後，你有 7 天的優先編輯權；若超過期限且歌詞與單字內容仍未完善，管理員可能會協助完善並發佈。'}
               </p>
               <p>
                 {locale === 'en'
                   ? '4. You can continue updating your own song after publishing if you need to fix or improve it.'
                   : locale === 'ja'
                     ? '4. 公開後の内容は一般ユーザーは編集できません。'
-                    : ''}
+                    : '4. 在你的發佈前后, 管理员如果判斷内容不当或明显有误，有權撤下或删除以保證本站内容質量。'}
               </p>
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">

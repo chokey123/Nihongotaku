@@ -555,7 +555,9 @@ export function AdminMusicForm({
   >('loading')
   const [isAddingVocab, setIsAddingVocab] = useState(false)
   const [isGettingAiVocabs, setIsGettingAiVocabs] = useState(false)
-  const [aiVocabQuota, setAiVocabQuota] = useState<AIMusicVocabQuota | null>(null)
+  const [aiVocabQuota, setAiVocabQuota] = useState<AIMusicVocabQuota | null>(
+    null,
+  )
   const [pendingSelection, setPendingSelection] =
     useState<VocabContextMenuState | null>(null)
   const [sourceUrl, setSourceUrl] = useState(
@@ -743,14 +745,14 @@ export function AdminMusicForm({
         if (!isMounted) return
         setAiVocabQuota(quota)
       })
-        .catch(() => {
-          if (!isMounted) return
-          setAiVocabQuota(
-            user.role === 'admin'
-              ? { limit: null, used: 0, remaining: null, isAdmin: true }
-              : { limit: 5, used: 5, remaining: 0, isAdmin: false },
-          )
-        })
+      .catch(() => {
+        if (!isMounted) return
+        setAiVocabQuota(
+          user.role === 'admin'
+            ? { limit: null, used: 0, remaining: null, isAdmin: true }
+            : { limit: 5, used: 5, remaining: 0, isAdmin: false },
+        )
+      })
 
     return () => {
       isMounted = false
@@ -976,9 +978,8 @@ export function AdminMusicForm({
     setIsGettingAiVocabs(true)
 
     try {
-      const { suggestions, quota } = await aiService.getMusicVocabsFromLyrics(
-        lyrics,
-      )
+      const { suggestions, quota } =
+        await aiService.getMusicVocabsFromLyrics(lyrics)
 
       setVocabs((current) => {
         const nextVocabs = [...current]
@@ -1343,6 +1344,7 @@ export function AdminMusicForm({
           <input
             value={sourceUrl}
             onChange={(event) => setSourceUrl(event.target.value)}
+            placeholder="請提供Youtube MV鏈接"
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
         </FormField>
@@ -1462,33 +1464,33 @@ export function AdminMusicForm({
             {lyrics.length > 0 ? (
               <>
                 <button
-                type="button"
-                onClick={addVocabsFromAi}
-                disabled={isPending || isGettingAiVocabs || !canUseAiVocab}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
-              >
-                {isGettingAiVocabs
-                  ? '...'
-                  : initialLocale === 'en'
-                    ? 'Get Vocab By AI'
-                    : initialLocale === 'ja'
-                      ? 'AIã§å˜èªžã‚’å–å¾—'
-                      : 'Get Vocab By AI'}
-              </button>
-              {user && !aiVocabQuota?.isAdmin ? (
-                <>
-                <span className="self-center text-xs text-muted">
-                  {`${aiVocabQuota?.remaining ?? 0}/5 left today`}
-                </span>
-                <span className="hidden self-center text-xs text-muted">
-                  {initialLocale === 'en'
-                    ? `${aiVocabQuota?.remaining ?? 0}/5 left today`
-                    : initialLocale === 'ja'
-                      ? `æœ¬æ—¥æ®‹ã‚Š ${aiVocabQuota?.remaining ?? 0}/5`
-                      : `今日剩餘 ${aiVocabQuota?.remaining ?? 0}/5`}
-                </span>
-                </>
-              ) : null}
+                  type="button"
+                  onClick={addVocabsFromAi}
+                  disabled={isPending || isGettingAiVocabs || !canUseAiVocab}
+                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
+                >
+                  {isGettingAiVocabs
+                    ? '...'
+                    : initialLocale === 'en'
+                      ? 'Get Vocab By AI'
+                      : initialLocale === 'ja'
+                        ? 'AIã§å˜èªžã‚’å–å¾—'
+                        : 'Get Vocab By AI'}
+                </button>
+                {user && !aiVocabQuota?.isAdmin ? (
+                  <>
+                    <span className="self-center text-xs text-muted">
+                      {`${aiVocabQuota?.remaining ?? 0}/5 left today`}
+                    </span>
+                    <span className="hidden self-center text-xs text-muted">
+                      {initialLocale === 'en'
+                        ? `${aiVocabQuota?.remaining ?? 0}/5 left today`
+                        : initialLocale === 'ja'
+                          ? `æœ¬æ—¥æ®‹ã‚Š ${aiVocabQuota?.remaining ?? 0}/5`
+                          : `今日剩餘 ${aiVocabQuota?.remaining ?? 0}/5`}
+                    </span>
+                  </>
+                ) : null}
               </>
             ) : null}
             {initialMusic?.id ? (

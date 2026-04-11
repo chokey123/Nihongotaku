@@ -1,116 +1,116 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from 'react'
 
 import {
   AutocompleteInput,
   type AutocompleteOption,
-} from "@/components/ui/autocomplete-input";
-import { backendService } from "@/lib/services/backend-service";
-import type { Dictionary } from "@/lib/i18n";
+} from '@/components/ui/autocomplete-input'
+import { backendService } from '@/lib/services/backend-service'
+import type { Dictionary } from '@/lib/i18n'
 
 function isValidYoutubeUrl(value: string) {
-  const normalized = value.trim();
+  const normalized = value.trim()
 
-  if (!normalized) return false;
+  if (!normalized) return false
 
   try {
-    const url = new URL(normalized);
-    const hostname = url.hostname.replace(/^www\./, "");
+    const url = new URL(normalized)
+    const hostname = url.hostname.replace(/^www\./, '')
 
-    if (hostname === "youtu.be") {
-      return url.pathname.replace("/", "").trim().length > 0;
+    if (hostname === 'youtu.be') {
+      return url.pathname.replace('/', '').trim().length > 0
     }
 
-    if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
-      return (url.searchParams.get("v") ?? "").trim().length > 0;
+    if (hostname === 'youtube.com' || hostname.endsWith('.youtube.com')) {
+      return (url.searchParams.get('v') ?? '').trim().length > 0
     }
 
-    return false;
+    return false
   } catch {
-    return false;
+    return false
   }
 }
 
 function getWishCopy(locale: string) {
-  if (locale === "en") {
+  if (locale === 'en') {
     return {
-      success: "Wish submitted successfully.",
-      fillAll: "Please complete every field.",
-      invalidYoutube: "Please enter a valid YouTube link.",
-      failed: "Failed to submit wish.",
-    };
+      success: 'Wish submitted successfully.',
+      fillAll: 'Please complete every field.',
+      invalidYoutube: 'Please enter a valid YouTube link.',
+      failed: 'Failed to submit wish.',
+    }
   }
 
-  if (locale === "ja") {
+  if (locale === 'ja') {
     return {
-      success: "リクエストを送信しました。",
-      fillAll: "すべての項目を入力してください。",
-      invalidYoutube: "有効な YouTube リンクを入力してください。",
-      failed: "リクエストの送信に失敗しました。",
-    };
+      success: 'リクエストを送信しました。',
+      fillAll: 'すべての項目を入力してください。',
+      invalidYoutube: '有効な YouTube リンクを入力してください。',
+      failed: 'リクエストの送信に失敗しました。',
+    }
   }
 
   return {
-    success: "許願已成功送出。",
-    fillAll: "請完整填寫所有欄位。",
-    invalidYoutube: "請填寫有效的 YouTube 連結。",
-    failed: "送出許願失敗。",
-  };
+    success: '許願已成功送出。',
+    fillAll: '請完整填寫所有欄位。',
+    invalidYoutube: '請填寫有效的 YouTube 連結。',
+    failed: '送出許願失敗。',
+  }
 }
 
 function normalizeSuggestionKeyword(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase()
 }
 
 function getClosestSuggestions(input: string, values: string[]) {
-  const keyword = normalizeSuggestionKeyword(input);
+  const keyword = normalizeSuggestionKeyword(input)
 
   if (!keyword) {
-    return values.slice(0, 5);
+    return values.slice(0, 5)
   }
 
   return values
     .filter((value) => normalizeSuggestionKeyword(value).includes(keyword))
     .sort((left, right) => {
-      const leftNormalized = normalizeSuggestionKeyword(left);
-      const rightNormalized = normalizeSuggestionKeyword(right);
-      const leftStartsWith = leftNormalized.startsWith(keyword) ? 0 : 1;
-      const rightStartsWith = rightNormalized.startsWith(keyword) ? 0 : 1;
+      const leftNormalized = normalizeSuggestionKeyword(left)
+      const rightNormalized = normalizeSuggestionKeyword(right)
+      const leftStartsWith = leftNormalized.startsWith(keyword) ? 0 : 1
+      const rightStartsWith = rightNormalized.startsWith(keyword) ? 0 : 1
 
       if (leftStartsWith !== rightStartsWith) {
-        return leftStartsWith - rightStartsWith;
+        return leftStartsWith - rightStartsWith
       }
 
-      const leftIndex = leftNormalized.indexOf(keyword);
-      const rightIndex = rightNormalized.indexOf(keyword);
+      const leftIndex = leftNormalized.indexOf(keyword)
+      const rightIndex = rightNormalized.indexOf(keyword)
 
       if (leftIndex !== rightIndex) {
-        return leftIndex - rightIndex;
+        return leftIndex - rightIndex
       }
 
-      return left.localeCompare(right);
+      return left.localeCompare(right)
     })
-    .slice(0, 5);
+    .slice(0, 5)
 }
 
 export function WishForm({
   dict,
   locale,
 }: {
-  dict: Dictionary;
-  locale: string;
+  dict: Dictionary
+  locale: string
 }) {
-  const [artist, setArtist] = useState("");
-  const [title, setTitle] = useState("");
-  const [genre, setGenre] = useState("");
-  const [url, setUrl] = useState("");
-  const [artistSuggestions, setArtistSuggestions] = useState<string[]>([]);
-  const [genreSuggestions, setGenreSuggestions] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
-  const [isPending, startTransition] = useTransition();
-  const copy = getWishCopy(locale);
+  const [artist, setArtist] = useState('')
+  const [title, setTitle] = useState('')
+  const [genre, setGenre] = useState('')
+  const [url, setUrl] = useState('')
+  const [artistSuggestions, setArtistSuggestions] = useState<string[]>([])
+  const [genreSuggestions, setGenreSuggestions] = useState<string[]>([])
+  const [message, setMessage] = useState('')
+  const [messageTone, setMessageTone] = useState<'success' | 'error'>('success')
+  const [isPending, startTransition] = useTransition()
+  const copy = getWishCopy(locale)
   const artistDropdownSuggestions = useMemo<AutocompleteOption[]>(
     () =>
       getClosestSuggestions(artist, artistSuggestions).map((value) => ({
@@ -118,7 +118,7 @@ export function WishForm({
         value,
       })),
     [artist, artistSuggestions],
-  );
+  )
   const genreDropdownSuggestions = useMemo<AutocompleteOption[]>(
     () =>
       getClosestSuggestions(genre, genreSuggestions).map((value) => ({
@@ -126,52 +126,52 @@ export function WishForm({
         value,
       })),
     [genre, genreSuggestions],
-  );
+  )
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
     backendService
       .getMusicFieldSuggestions({ includeUnpublished: true })
       .then((suggestions) => {
-        if (!isMounted) return;
-        setArtistSuggestions(suggestions.artists);
-        setGenreSuggestions(suggestions.genres);
+        if (!isMounted) return
+        setArtistSuggestions(suggestions.artists)
+        setGenreSuggestions(suggestions.genres)
       })
       .catch(() => {
-        if (!isMounted) return;
-        setArtistSuggestions([]);
-        setGenreSuggestions([]);
-      });
+        if (!isMounted) return
+        setArtistSuggestions([])
+        setGenreSuggestions([])
+      })
 
     return () => {
-      isMounted = false;
-    };
-  }, []);
+      isMounted = false
+    }
+  }, [])
 
   return (
     <form
       className="glass-panel flex flex-col gap-4 rounded-[32px] border border-border p-6"
       autoComplete="off"
       onSubmit={(event) => {
-        event.preventDefault();
+        event.preventDefault()
 
         startTransition(async () => {
-          const nextArtist = artist.trim();
-          const nextTitle = title.trim();
-          const nextGenre = genre.trim();
-          const nextUrl = url.trim();
+          const nextArtist = artist.trim()
+          const nextTitle = title.trim()
+          const nextGenre = genre.trim()
+          const nextUrl = url.trim()
 
           if (!nextArtist || !nextTitle || !nextGenre || !nextUrl) {
-            setMessage(copy.fillAll);
-            setMessageTone("error");
-            return;
+            setMessage(copy.fillAll)
+            setMessageTone('error')
+            return
           }
 
           if (!isValidYoutubeUrl(nextUrl)) {
-            setMessage(copy.invalidYoutube);
-            setMessageTone("error");
-            return;
+            setMessage(copy.invalidYoutube)
+            setMessageTone('error')
+            return
           }
 
           try {
@@ -180,19 +180,19 @@ export function WishForm({
               title: nextTitle,
               genre: nextGenre,
               url: nextUrl,
-            });
-            setMessage(copy.success);
-            setMessageTone("success");
-            setArtist("");
-            setTitle("");
-            setGenre("");
-            setUrl("");
-            window.dispatchEvent(new CustomEvent("nihongotaku:wish-created"));
+            })
+            setMessage(copy.success)
+            setMessageTone('success')
+            setArtist('')
+            setTitle('')
+            setGenre('')
+            setUrl('')
+            window.dispatchEvent(new CustomEvent('nihongotaku:wish-created'))
           } catch (error) {
-            setMessage(error instanceof Error ? error.message : copy.failed);
-            setMessageTone("error");
+            setMessage(error instanceof Error ? error.message : copy.failed)
+            setMessageTone('error')
           }
-        });
+        })
       }}
     >
       <div className="grid gap-4 md:grid-cols-2">
@@ -205,7 +205,7 @@ export function WishForm({
             onValueChange={setArtist}
             suggestions={artistDropdownSuggestions}
             onSelect={(option) => {
-              setArtist(option.value);
+              setArtist(option.value)
             }}
             required
             wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
@@ -232,7 +232,7 @@ export function WishForm({
             onValueChange={setGenre}
             suggestions={genreDropdownSuggestions}
             onSelect={(option) => {
-              setGenre(option.value);
+              setGenre(option.value)
             }}
             required
             wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
@@ -247,6 +247,7 @@ export function WishForm({
             autoComplete="off"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
+            placeholder="請提供Youtube MV鏈接"
             required
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
@@ -257,19 +258,19 @@ export function WishForm({
         disabled={isPending}
         className="w-fit rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white disabled:opacity-70"
       >
-        {isPending ? "..." : dict.labels.submit}
+        {isPending ? '...' : dict.labels.submit}
       </button>
       {message ? (
         <p
           className={`rounded-2xl px-4 py-3 text-sm ${
-            messageTone === "success"
-              ? "bg-brand-soft text-brand-strong"
-              : "border border-red-200 bg-red-50 text-red-700"
+            messageTone === 'success'
+              ? 'bg-brand-soft text-brand-strong'
+              : 'border border-red-200 bg-red-50 text-red-700'
           }`}
         >
           {message}
         </p>
       ) : null}
     </form>
-  );
+  )
 }

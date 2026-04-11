@@ -176,14 +176,16 @@ export function MusicDetailClient({
   item,
   dict,
   locale,
+  showQuizLink = true,
 }: {
   item: MusicItem
   dict: Dictionary
   locale: Locale
+  showQuizLink?: boolean
 }) {
   const { currentMs, seekToMs } = useYoutubePlayer(item.youtubeId)
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
-  const lyricButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const activeLine = useMemo(() => {
     return (
@@ -199,19 +201,19 @@ export function MusicDetailClient({
 
   useEffect(() => {
     const container = lyricsContainerRef.current
-    const activeButton = activeLine
-      ? lyricButtonRefs.current[activeLine.id]
+    const activeCard = activeLine
+      ? lyricLineRefs.current[activeLine.id]
       : null
 
-    if (!container || !activeButton) return
+    if (!container || !activeCard) return
 
     const containerRect = container.getBoundingClientRect()
-    const buttonRect = activeButton.getBoundingClientRect()
+    const cardRect = activeCard.getBoundingClientRect()
     const nextScrollTop =
       container.scrollTop +
-      (buttonRect.top - containerRect.top) -
+      (cardRect.top - containerRect.top) -
       container.clientHeight / 2 +
-      activeButton.clientHeight / 2
+      activeCard.clientHeight / 2
 
     container.scrollTo({
       top: Math.max(0, nextScrollTop),
@@ -233,12 +235,14 @@ export function MusicDetailClient({
             <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
               {item.genre}
             </span>
-            <Link
-              href={`/${locale}/music/quiz/${item.id}`}
-              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
-            >
-              {dict.sections.quiz}
-            </Link>
+            {showQuizLink ? (
+              <Link
+                href={`/${locale}/music/quiz/${item.id}`}
+                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
+              >
+                {dict.sections.quiz}
+              </Link>
+            ) : null}
           </div>
         </div>
         <div className="mx-auto w-full max-w-sm overflow-hidden rounded-[26px] border border-border sm:max-w-xl md:max-w-2xl lg:max-w-none">
@@ -318,14 +322,28 @@ export function MusicDetailClient({
             const isActive = activeLine?.id === line.id
 
             return (
-              <button
+              <div
                 key={line.id}
                 ref={(node) => {
-                  lyricButtonRefs.current[line.id] = node
+                  lyricLineRefs.current[line.id] = node
                 }}
-                type="button"
-                onClick={() => seekToMs(line.atMs)}
-                className={`rounded-[24px] border p-4 text-left transition ${
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  const selection = window.getSelection()
+                  if (selection && !selection.isCollapsed) {
+                    return
+                  }
+
+                  seekToMs(line.atMs)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    seekToMs(line.atMs)
+                  }
+                }}
+                className={`cursor-pointer select-text rounded-[24px] border p-4 text-left transition ${
                   isActive
                     ? 'border-brand bg-brand-soft'
                     : 'border-border bg-surface hover:border-brand'
@@ -346,7 +364,7 @@ export function MusicDetailClient({
                 <p className="mt-2 text-sm text-muted">
                   {getLocalizedText(line.translation, locale)}
                 </p>
-              </button>
+              </div>
             )
           })}
         </div>
