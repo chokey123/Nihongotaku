@@ -167,7 +167,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
     (editor.getAttributes("image").align as string | undefined) ?? "center";
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border pb-4">
+    <div className="sticky top-0 z-30 mb-4 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-4 py-4 shadow-sm">
       <ToolbarButton
         label="Bold"
         isActive={editor.isActive("bold")}
@@ -338,9 +338,11 @@ export function ArticleEditor({
   }
 
   return (
-    <div className="rounded-[28px] border border-border bg-surface p-4">
+    <div className="flex h-[min(760px,78vh)] flex-col overflow-hidden rounded-[28px] border border-border bg-surface">
       <EditorToolbar editor={editor} />
-      <EditorContent editor={editor} />
+      <div className="mx-4 mb-4 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[22px] pr-2">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }
