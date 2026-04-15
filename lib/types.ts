@@ -95,6 +95,19 @@ export interface MusicItem {
   quizVocabKeys: string[];
 }
 
+export interface MusicSearchPage {
+  items: MusicItem[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface MusicFilterOption {
+  value: string;
+  count: number;
+}
+
 export interface ArticleItem {
   id: string;
   title: string;

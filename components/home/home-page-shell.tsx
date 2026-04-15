@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MusicCard } from '@/components/ui/music-card'
 import {
@@ -8,9 +8,12 @@ import {
   type AutocompleteOption,
 } from '@/components/ui/autocomplete-input'
 import { SectionHeading } from '@/components/ui/section-heading'
-import type { MusicItem } from '@/lib/types'
+import type { MusicFilterOption, MusicItem, MusicSearchPage } from '@/lib/types'
 
 type SupportedLocale = 'zh' | 'en' | 'ja'
+
+const MUSIC_PAGE_SIZE = 6
+const FILTER_PAGE_SIZE = 5
 
 const homeShellCopy = {
   zh: {
@@ -58,53 +61,13 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase()
 }
 
-function buildTopFilters(values: string[]) {
-  const counts = new Map<string, number>()
-
-  for (const value of values) {
-    const normalized = value.trim()
-    if (!normalized) {
-      continue
-    }
-
-    counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
-  }
-
-  return [...counts.entries()]
-    .sort((left, right) => {
-      if (right[1] !== left[1]) {
-        return right[1] - left[1]
-      }
-
-      const leftKey = normalizeText(left[0])
-      const rightKey = normalizeText(right[0])
-
-      if (leftKey < rightKey) {
-        return -1
-      }
-
-      if (leftKey > rightKey) {
-        return 1
-      }
-
-      if (left[0] < right[0]) {
-        return -1
-      }
-
-      if (left[0] > right[0]) {
-        return 1
-      }
-
-      return 0
-    })
-    .slice(0, 5)
-    .map(([value, count]) => ({ value, count }))
-}
-
 export function HomePageShell({
   lang,
   dict,
   music,
+  musicTotal,
+  artistFilterOptions,
+  genreFilterOptions,
 }: {
   lang: string
   dict: {
@@ -118,6 +81,9 @@ export function HomePageShell({
     }
   }
   music: MusicItem[]
+  musicTotal: number
+  artistFilterOptions: MusicFilterOption[]
+  genreFilterOptions: MusicFilterOption[]
 }) {
   const locale: SupportedLocale =
     lang === 'zh' || lang === 'en' || lang === 'ja' ? lang : 'zh'
@@ -131,15 +97,31 @@ export function HomePageShell({
   const [query, setQuery] = useState('')
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null)
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null)
+  const [visibleMusic, setVisibleMusic] = useState(music)
+  const [totalMusic, setTotalMusic] = useState(musicTotal)
+  const [visibleArtistFilterCount, setVisibleArtistFilterCount] =
+    useState(FILTER_PAGE_SIZE)
+  const [visibleGenreFilterCount, setVisibleGenreFilterCount] =
+    useState(FILTER_PAGE_SIZE)
+  const [isRefreshingMusic, setIsRefreshingMusic] = useState(false)
+  const [isLoadingMoreMusic, setIsLoadingMoreMusic] = useState(false)
+  const hasMountedRef = useRef(false)
+  const requestIdRef = useRef(0)
+  const loadMoreRequestIdRef = useRef(0)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
 
   const topArtists = useMemo(
-    () => buildTopFilters(music.map((item) => item.artist)),
-    [music],
+    () => artistFilterOptions.slice(0, visibleArtistFilterCount),
+    [artistFilterOptions, visibleArtistFilterCount],
   )
   const topGenres = useMemo(
-    () => buildTopFilters(music.map((item) => item.genre)),
-    [music],
+    () => genreFilterOptions.slice(0, visibleGenreFilterCount),
+    [genreFilterOptions, visibleGenreFilterCount],
   )
+  const hasMoreArtists = visibleArtistFilterCount < artistFilterOptions.length
+  const hasMoreGenres = visibleGenreFilterCount < genreFilterOptions.length
+  const moreLabel =
+    locale === 'en' ? 'More' : locale === 'ja' ? 'もっと' : '更多'
 
   const suggestions = useMemo<AutocompleteOption[]>(() => {
     const keyword = normalizeText(draftQuery)
@@ -149,7 +131,7 @@ export function HomePageShell({
 
     const unique = new Map<string, AutocompleteOption>()
 
-    for (const item of music) {
+    for (const item of visibleMusic) {
       if (
         normalizeText(item.artist).includes(keyword) &&
         !unique.has(`artist:${item.artist}`)
@@ -178,26 +160,138 @@ export function HomePageShell({
     }
 
     return [...unique.values()]
-  }, [copy.suggestionArtist, copy.suggestionSong, draftQuery, music])
+  }, [copy.suggestionArtist, copy.suggestionSong, draftQuery, visibleMusic])
 
-  const filteredMusic = useMemo(() => {
-    const keyword = normalizeText(query)
+  const loadMusicPage = useCallback(
+    async (offset: number) => {
+      const params = new URLSearchParams({
+        limit: String(MUSIC_PAGE_SIZE),
+        offset: String(offset),
+      })
+      const trimmedQuery = query.trim()
 
-    return music.filter((item) => {
-      const matchesQuery =
-        keyword.length === 0 ||
-        normalizeText(item.title).includes(keyword) ||
-        normalizeText(item.artist).includes(keyword)
+      if (trimmedQuery) {
+        params.set('q', trimmedQuery)
+      }
 
-      const matchesArtist =
-        !selectedArtist || normalizeText(item.artist) === normalizeText(selectedArtist)
+      if (selectedArtist) {
+        params.set('artist', selectedArtist)
+      }
 
-      const matchesGenre =
-        !selectedGenre || normalizeText(item.genre) === normalizeText(selectedGenre)
+      if (selectedGenre) {
+        params.set('genre', selectedGenre)
+      }
 
-      return matchesQuery && matchesArtist && matchesGenre
-    })
-  }, [music, query, selectedArtist, selectedGenre])
+      const response = await fetch(`/api/music?${params.toString()}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to load music')
+      }
+
+      return (await response.json()) as MusicSearchPage
+    },
+    [query, selectedArtist, selectedGenre],
+  )
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
+
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
+    loadMoreRequestIdRef.current += 1
+
+    const timeoutId = window.setTimeout(() => {
+      setIsRefreshingMusic(true)
+      setIsLoadingMoreMusic(false)
+
+      loadMusicPage(0)
+        .then((page) => {
+          if (requestIdRef.current !== requestId) {
+            return
+          }
+
+          setVisibleMusic(page.items)
+          setTotalMusic(page.total)
+        })
+        .catch(() => {
+          if (requestIdRef.current === requestId) {
+            setVisibleMusic([])
+            setTotalMusic(0)
+          }
+        })
+        .finally(() => {
+          if (requestIdRef.current === requestId) {
+            setIsRefreshingMusic(false)
+          }
+        })
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [loadMusicPage])
+
+  const hasMoreMusic = visibleMusic.length < totalMusic
+
+  const loadMoreMusic = useCallback(() => {
+    if (isRefreshingMusic || isLoadingMoreMusic || !hasMoreMusic) {
+      return
+    }
+
+    const requestId = requestIdRef.current
+    const loadMoreRequestId = loadMoreRequestIdRef.current + 1
+    loadMoreRequestIdRef.current = loadMoreRequestId
+    setIsLoadingMoreMusic(true)
+    loadMusicPage(visibleMusic.length)
+      .then((page) => {
+        if (requestIdRef.current !== requestId) {
+          return
+        }
+
+        setVisibleMusic((current) => {
+          const existingIds = new Set(current.map((item) => item.id))
+          const nextItems = page.items.filter((item) => !existingIds.has(item.id))
+          return [...current, ...nextItems]
+        })
+        setTotalMusic(page.total)
+      })
+      .finally(() => {
+        if (loadMoreRequestIdRef.current === loadMoreRequestId) {
+          setIsLoadingMoreMusic(false)
+        }
+      })
+  }, [
+    hasMoreMusic,
+    isLoadingMoreMusic,
+    isRefreshingMusic,
+    loadMusicPage,
+    visibleMusic.length,
+  ])
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMoreMusic()
+        }
+      },
+      { rootMargin: '360px 0px' },
+    )
+
+    observer.observe(target)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [loadMoreMusic])
 
   const appliedFilters = useMemo(
     () =>
@@ -229,42 +323,42 @@ export function HomePageShell({
         </div>
       </section>
 
-      <section className="space-y-5 px-1 sm:px-0">
-        <div className="relative">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              setQuery(draftQuery)
+      <div className="sticky top-20 z-30 -mx-1 px-1 py-2 backdrop-blur">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            setQuery(draftQuery)
+          }}
+        >
+          <AutocompleteInput
+            type="search"
+            value={draftQuery}
+            suggestions={suggestions}
+            placeholder={copy.searchPlaceholder}
+            suppressHydrationWarning
+            onValueChange={setDraftQuery}
+            onSelect={(option) => {
+              setDraftQuery(option.value)
+              setQuery(option.value)
             }}
-          >
-            <AutocompleteInput
-              type="search"
-              value={draftQuery}
-              suggestions={suggestions}
-              placeholder={copy.searchPlaceholder}
-              suppressHydrationWarning
-              onValueChange={setDraftQuery}
-              onSelect={(option) => {
-                setDraftQuery(option.value)
-                setQuery(option.value)
-              }}
-              onCommit={(nextValue) => {
-                setQuery(nextValue)
-              }}
-              wrapperClassName="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
-              inputClassName="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
-              trailing={
-                <button
-                  type="submit"
-                  className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white"
-                >
-                  {copy.searchButton}
-                </button>
-              }
-            />
-          </form>
-        </div>
+            onCommit={(nextValue) => {
+              setQuery(nextValue)
+            }}
+            wrapperClassName="flex w-full items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-surface"
+            inputClassName="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-foreground dark:placeholder:text-muted"
+            trailing={
+              <button
+                type="submit"
+                className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white"
+              >
+                {copy.searchButton}
+              </button>
+            }
+          />
+        </form>
+      </div>
 
+      <section className="space-y-5 px-1 sm:px-0">
         {appliedFilters.length > 0 ? (
           <div className="flex flex-wrap gap-2 text-xs text-muted">
             {appliedFilters.map((filter) => (
@@ -309,6 +403,19 @@ export function HomePageShell({
                   </button>
                 )
               })}
+              {hasMoreArtists ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleArtistFilterCount((current) =>
+                      Math.min(current + FILTER_PAGE_SIZE, artistFilterOptions.length),
+                    )
+                  }
+                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
+                >
+                  {moreLabel}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -342,6 +449,19 @@ export function HomePageShell({
                   </button>
                 )
               })}
+              {hasMoreGenres ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleGenreFilterCount((current) =>
+                      Math.min(current + FILTER_PAGE_SIZE, genreFilterOptions.length),
+                    )
+                  }
+                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
+                >
+                  {moreLabel}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -372,12 +492,16 @@ export function HomePageShell({
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-muted">
-            {copy.results} · {copy.resultCount(filteredMusic.length)}
+            {copy.results} · {copy.resultCount(totalMusic)}
           </p>
         </div>
-        {filteredMusic.length > 0 ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredMusic.map((item) => (
+        {visibleMusic.length > 0 ? (
+          <div
+            className={`grid gap-5 transition-opacity md:grid-cols-2 xl:grid-cols-3 ${
+              isRefreshingMusic ? 'opacity-60' : 'opacity-100'
+            }`}
+          >
+            {visibleMusic.map((item) => (
               <MusicCard key={item.id} item={item} locale={lang} />
             ))}
           </div>
@@ -386,6 +510,12 @@ export function HomePageShell({
             {copy.noResults}
           </div>
         )}
+        <div ref={loadMoreRef} className="h-8" aria-hidden="true" />
+        {isLoadingMoreMusic ? (
+          <p className="text-center text-sm font-medium text-muted">
+            {locale === 'en' ? 'Loading more songs...' : 'Loading more music...'}
+          </p>
+        ) : null}
       </section>
     </div>
   )

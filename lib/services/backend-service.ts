@@ -11,7 +11,9 @@ import type {
   HomePayload,
   LocalizedText,
   MusicDraftPayload,
+  MusicFilterOption,
   MusicQuizAttemptRecord,
+  MusicSearchPage,
   MusicItem,
   MusicQuizQuestion,
   MusicSubmissionSource,
@@ -166,6 +168,11 @@ interface SupabaseMusicDuplicateRow {
   youtube_video_id: string | null
   source_url: string | null
   is_published: boolean | null
+}
+
+interface SupabaseMusicFilterRow {
+  artist: string
+  genre: string
 }
 
 interface SupabaseMusicQuizAttemptAnswerRow {
@@ -537,6 +544,87 @@ function applySearchFilter(items: MusicItem[], query: string) {
   )
 }
 
+function applyMusicFilters(
+  items: MusicItem[],
+  filters: { query?: string; artist?: string | null; genre?: string | null },
+) {
+  const keyword = filters.query?.trim().toLowerCase() ?? ''
+  const artist = filters.artist?.trim().toLowerCase() ?? ''
+  const genre = filters.genre?.trim().toLowerCase() ?? ''
+
+  return items.filter((item) => {
+    const matchesQuery =
+      keyword.length === 0 ||
+      [item.title, item.artist, item.genre].some((value) =>
+        value.toLowerCase().includes(keyword),
+      )
+
+    const matchesArtist =
+      artist.length === 0 || item.artist.trim().toLowerCase() === artist
+
+    const matchesGenre =
+      genre.length === 0 || item.genre.trim().toLowerCase() === genre
+
+    return matchesQuery && matchesArtist && matchesGenre
+  })
+}
+
+function paginateMusicItems(
+  items: MusicItem[],
+  offset: number,
+  limit: number,
+): MusicSearchPage {
+  const safeOffset = Math.max(0, offset)
+  const safeLimit = Math.max(1, limit)
+  const pageItems = items.slice(safeOffset, safeOffset + safeLimit)
+
+  return {
+    items: pageItems,
+    total: items.length,
+    offset: safeOffset,
+    limit: safeLimit,
+    hasMore: safeOffset + pageItems.length < items.length,
+  }
+}
+
+function sanitizeSupabaseLikeTerm(value: string) {
+  return value.replace(/[%_(),]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function buildMusicFilterOptions(values: string[]): MusicFilterOption[] {
+  const counts = new Map<string, number>()
+
+  for (const value of values) {
+    const normalized = value.trim()
+    if (!normalized) {
+      continue
+    }
+
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1]
+      }
+
+      const leftKey = left[0].trim().toLowerCase()
+      const rightKey = right[0].trim().toLowerCase()
+
+      if (leftKey < rightKey) {
+        return -1
+      }
+
+      if (leftKey > rightKey) {
+        return 1
+      }
+
+      return left[0].localeCompare(right[0])
+    })
+    .map(([value, count]) => ({ value, count }))
+}
+
 async function getCurrentActorId() {
   const {
     data: { session },
@@ -692,28 +780,72 @@ export class BackendService {
     )
   }
 
-  private async fetchMusicRows(includeUnpublished = false) {
+  private async fetchMusicRows(
+    includeUnpublished = false,
+    options?: {
+      query?: string
+      artist?: string | null
+      genre?: string | null
+      offset?: number
+      limit?: number
+      count?: boolean
+    },
+  ) {
     if (!hasSupabaseConfig) {
       return null
     }
 
+    const trimmedQuery = options?.query?.trim() ?? ''
+    const trimmedArtist = options?.artist?.trim() ?? ''
+    const trimmedGenre = options?.genre?.trim() ?? ''
+
     let query = supabase
       .from('music')
-      .select(MUSIC_SELECT)
+      .select(MUSIC_SELECT, options?.count ? { count: 'exact' } : undefined)
       .order('created_at', { ascending: false })
 
     if (!includeUnpublished) {
       query = query.eq('is_published', true)
     }
 
-    const { data, error } = await query
+    if (trimmedQuery) {
+      const likeTerm = sanitizeSupabaseLikeTerm(trimmedQuery)
+
+      if (likeTerm) {
+        query = query.or(
+          `title.ilike.%${likeTerm}%,artist.ilike.%${likeTerm}%,genre.ilike.%${likeTerm}%`,
+        )
+      }
+    }
+
+    if (trimmedArtist) {
+      query = query.eq('artist', trimmedArtist)
+    }
+
+    if (trimmedGenre) {
+      query = query.eq('genre', trimmedGenre)
+    }
+
+    if (
+      typeof options?.offset === 'number' &&
+      typeof options?.limit === 'number'
+    ) {
+      const from = Math.max(0, options.offset)
+      const to = from + Math.max(1, options.limit) - 1
+      query = query.range(from, to)
+    }
+
+    const { data, error, count } = await query
 
     if (error) {
       logSupabaseQueryError('fetchMusicRows', error)
       return null
     }
 
-    return (data ?? []) as SupabaseMusicRow[]
+    return {
+      rows: (data ?? []) as SupabaseMusicRow[],
+      count: count ?? undefined,
+    }
   }
 
   private async fetchMusicRowById(id: string, includeUnpublished = false) {
@@ -739,12 +871,36 @@ export class BackendService {
     return data as SupabaseMusicRow
   }
 
+  private async fetchMusicFilterRows(includeUnpublished = false) {
+    if (!hasSupabaseConfig) {
+      return null
+    }
+
+    let query = supabase
+      .from('music')
+      .select('artist, genre')
+      .order('created_at', { ascending: false })
+
+    if (!includeUnpublished) {
+      query = query.eq('is_published', true)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      logSupabaseQueryError('fetchMusicFilterRows', error)
+      return null
+    }
+
+    return (data ?? []) as SupabaseMusicFilterRow[]
+  }
+
   private async findMusicRowInCollection(
     id: string,
     includeUnpublished = false,
   ) {
-    const rows = await this.fetchMusicRows(includeUnpublished)
-    return rows?.find((row) => row.id === id) ?? null
+    const result = await this.fetchMusicRows(includeUnpublished)
+    return result?.rows.find((row) => row.id === id) ?? null
   }
 
   private async fetchArticleRows(includeUnpublished = false) {
@@ -1078,19 +1234,88 @@ export class BackendService {
     query = '',
     options?: { includeUnpublished?: boolean },
   ): Promise<MusicItem[]> {
-    const rows = await this.fetchMusicRows(options?.includeUnpublished ?? false)
+    const result = await this.fetchMusicRows(
+      options?.includeUnpublished ?? false,
+    )
 
-    if (!rows) {
+    if (!result) {
       await wait()
       return buildFallbackMusicItems(query)
     }
 
     return applySearchFilter(
       await enrichMusicCreatorRoles(
-        rows.map((row) => buildMusicItemFromSupabase(row)),
+        result.rows.map((row) => buildMusicItemFromSupabase(row)),
       ),
       query,
     )
+  }
+
+  async searchMusicPage(
+    query = '',
+    options?: {
+      includeUnpublished?: boolean
+      artist?: string | null
+      genre?: string | null
+      offset?: number
+      limit?: number
+    },
+  ): Promise<MusicSearchPage> {
+    const offset = Math.max(0, options?.offset ?? 0)
+    const limit = Math.max(1, options?.limit ?? 6)
+    const result = await this.fetchMusicRows(
+      options?.includeUnpublished ?? false,
+      {
+        query,
+        artist: options?.artist,
+        genre: options?.genre,
+        offset,
+        limit,
+        count: true,
+      },
+    )
+
+    if (!result) {
+      await wait()
+      return paginateMusicItems(
+        applyMusicFilters(buildFallbackMusicItems(), {
+          query,
+          artist: options?.artist,
+          genre: options?.genre,
+        }),
+        offset,
+        limit,
+      )
+    }
+
+    const items = await enrichMusicCreatorRoles(
+      result.rows.map((row) => buildMusicItemFromSupabase(row)),
+    )
+    const total = result.count ?? offset + items.length
+
+    return {
+      items,
+      total,
+      offset,
+      limit,
+      hasMore: offset + items.length < total,
+    }
+  }
+
+  async getMusicFilterOptions(options?: { includeUnpublished?: boolean }) {
+    const rows = await this.fetchMusicFilterRows(
+      options?.includeUnpublished ?? false,
+    )
+    const items =
+      rows ??
+      normalizedMusicCatalog.filter(
+        (item) => options?.includeUnpublished || item.isPublished !== false,
+      )
+
+    return {
+      artists: buildMusicFilterOptions(items.map((item) => item.artist)),
+      genres: buildMusicFilterOptions(items.map((item) => item.genre)),
+    }
   }
 
   async getMusicFieldSuggestions(options?: { includeUnpublished?: boolean }) {
