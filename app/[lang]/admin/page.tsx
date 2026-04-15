@@ -24,6 +24,11 @@ export default async function AdminPage({
             <h2 className="mt-2 font-heading text-2xl font-bold">{dict.pages.adminMusicLibraryTitle}</h2>
             <p className="mt-3 text-muted">{dict.pages.adminMusicLibraryDescription}</p>
           </Link>
+          <Link href={`/${lang}/admin/music/image-gen`} className="glass-panel rounded-[32px] border border-border p-6 transition hover:-translate-y-1 hover:border-brand">
+            <p className="text-sm text-muted">{dict.sections.songLibrary}</p>
+            <h2 className="mt-2 font-heading text-2xl font-bold">Music image generator</h2>
+            <p className="mt-3 text-muted">Generate 4:5 lyric and vocab cards from song data.</p>
+          </Link>
           <Link href={`/${lang}/admin/article`} className="glass-panel rounded-[32px] border border-border p-6 transition hover:-translate-y-1 hover:border-brand">
             <p className="text-sm text-muted">{dict.sections.articleLibrary}</p>
             <h2 className="mt-2 font-heading text-2xl font-bold">{dict.pages.adminArticleLibraryTitle}</h2>
