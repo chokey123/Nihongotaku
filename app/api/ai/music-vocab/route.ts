@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 
 import type { AIMusicVocabQuota, AIMusicVocabSuggestion } from '@/lib/types'
 
-const GEMINI_MODEL = 'gemini-3-flash-preview'
+const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 const DAILY_LIMIT = 5
 
 interface AiMusicVocabDailyUsageRow {
