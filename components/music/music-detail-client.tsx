@@ -248,7 +248,8 @@ const vocabPanelCopy = {
     noVocab: 'No vocab cards are assigned to this lyric line yet.',
   },
   ja: {
-    notStarted: '曲はまだ始まっていません。単語カードは歌詞に合わせて表示されます。',
+    notStarted:
+      '曲はまだ始まっていません。単語カードは歌詞に合わせて表示されます。',
     noVocab: 'この歌詞にはまだ単語カードがありません。',
   },
 } as const
@@ -363,7 +364,8 @@ export function MusicDetailClient({
         : maxScrollLeft - container.scrollLeft <= 1
           ? cards.length - 1
           : cards.reduce((closestIndex, card, index) => {
-              const visibleCenter = container.scrollLeft + container.clientWidth / 2
+              const visibleCenter =
+                container.scrollLeft + container.clientWidth / 2
               const closestCard = cards[closestIndex]
               const cardCenter = card.offsetLeft + card.offsetWidth / 2
               const closestCenter =
@@ -405,7 +407,7 @@ export function MusicDetailClient({
             <div className="flex flex-wrap items-center justify-end gap-2">
               {showQuizLink ? (
                 <span className="text-sm font-semibold text-muted">
-                  想知道自己學會了嗎？
+                  學會了嗎？
                 </span>
               ) : null}
               {showQuizLink ? (
@@ -436,18 +438,16 @@ export function MusicDetailClient({
             ) : null}
           </div>
           <div className="mt-4 min-w-0 overflow-hidden rounded-[18px] border border-border bg-brand-soft/60 p-2.5 lg:mt-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="font-heading text-base font-bold">
-                  {dict.sections.vocab}
-                </h2>
-                <div className="flex items-center gap-2 text-xs text-muted">
-                  <span>{selectedLine?.timeLabel}</span>
-                </div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="font-heading text-base font-bold">
+                {dict.sections.vocab}
+              </h2>
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>{selectedLine?.timeLabel}</span>
               </div>
-              {selectedLineVocabs.length > 0 ? (
-                <div
-                  className="group/vocab-scroll relative"
-                >
+            </div>
+            {selectedLineVocabs.length > 0 ? (
+              <div className="group/vocab-scroll relative">
                 {vocabScrollState.canScrollLeft ? (
                   <button
                     type="button"
@@ -492,28 +492,26 @@ export function MusicDetailClient({
                         : density === 'compact'
                           ? 'text-xs leading-tight'
                           : 'text-[15px] leading-tight'
-                    const furiganaClass =
-                      isSparseVocabPanel
-                        ? density === 'tiny'
-                          ? 'text-[10px]'
+                    const furiganaClass = isSparseVocabPanel
+                      ? density === 'tiny'
+                        ? 'text-[10px]'
+                        : 'text-xs'
+                      : density === 'tiny'
+                        ? 'text-[10px]'
+                        : density === 'compact'
+                          ? 'text-[11px]'
                           : 'text-xs'
-                        : density === 'tiny'
-                          ? 'text-[10px]'
-                          : density === 'compact'
-                            ? 'text-[11px]'
-                            : 'text-xs'
-                    const bodyClass =
-                      isSparseVocabPanel
-                        ? density === 'tiny'
-                          ? 'text-[10px] leading-[1.08]'
-                          : density === 'compact'
-                            ? 'text-xs leading-tight'
-                            : 'text-sm leading-snug'
-                        : density === 'tiny'
-                          ? 'text-[9px] leading-[1.05]'
-                          : density === 'compact'
-                            ? 'text-[11px] leading-tight'
-                            : 'text-[13px] leading-snug'
+                    const bodyClass = isSparseVocabPanel
+                      ? density === 'tiny'
+                        ? 'text-[10px] leading-[1.08]'
+                        : density === 'compact'
+                          ? 'text-xs leading-tight'
+                          : 'text-sm leading-snug'
+                      : density === 'tiny'
+                        ? 'text-[9px] leading-[1.05]'
+                        : density === 'compact'
+                          ? 'text-[11px] leading-tight'
+                          : 'text-[13px] leading-snug'
                     const bodyGap = density === 'normal' ? 'gap-0.5' : 'gap-px'
                     const cardWidth = isSparseVocabPanel
                       ? selectedLineVocabs.length === 1
@@ -546,9 +544,7 @@ export function MusicDetailClient({
                           >
                             {meaning}
                           </p>
-                          <p
-                            className={`break-words text-muted ${bodyClass}`}
-                          >
+                          <p className={`break-words text-muted ${bodyClass}`}>
                             {vocab.example}
                           </p>
                           {exampleTranslation ? (
@@ -573,15 +569,15 @@ export function MusicDetailClient({
                     ›
                   </button>
                 ) : null}
-                </div>
-              ) : (
-                <div className="flex h-[136px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[132px] lg:h-[148px]">
-                  {selectedLine
-                    ? vocabPanelCopy[locale].noVocab
-                    : vocabPanelCopy[locale].notStarted}
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex h-[136px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[132px] lg:h-[148px]">
+                {selectedLine
+                  ? vocabPanelCopy[locale].noVocab
+                  : vocabPanelCopy[locale].notStarted}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="glass-panel min-w-0 overflow-hidden rounded-[28px] border border-border p-4">
