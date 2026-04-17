@@ -10,6 +10,8 @@ import { MusicCard } from '@/components/ui/music-card'
 interface YoutubePlayer {
   destroy: () => void
   getCurrentTime: () => number
+  pauseVideo: () => void
+  playVideo: () => void
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void
 }
 
@@ -50,6 +52,7 @@ declare global {
 function useYoutubePlayer(videoId: string) {
   const [currentMs, setCurrentMs] = useState(0)
   const [hasTimelineStarted, setHasTimelineStarted] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
   const playerRef = useRef<YoutubePlayer | null>(null)
   const intervalRef = useRef<number | null>(null)
 
@@ -90,6 +93,7 @@ function useYoutubePlayer(videoId: string) {
       playerRef.current = event.target
       setCurrentMs(0)
       setHasTimelineStarted(false)
+      setIsPlaying(false)
       startPolling()
       syncCurrentTime(event.target)
     }
@@ -98,6 +102,7 @@ function useYoutubePlayer(videoId: string) {
       if (!window.YT) return
 
       if (event.data === window.YT.PlayerState.PLAYING) {
+        setIsPlaying(true)
         syncCurrentTime(event.target)
         return
       }
@@ -105,9 +110,13 @@ function useYoutubePlayer(videoId: string) {
       if (
         event.data === window.YT.PlayerState.PAUSED ||
         event.data === window.YT.PlayerState.ENDED ||
-        event.data === window.YT.PlayerState.BUFFERING ||
         event.data === window.YT.PlayerState.CUED
       ) {
+        setIsPlaying(false)
+        syncCurrentTime(event.target)
+      }
+
+      if (event.data === window.YT.PlayerState.BUFFERING) {
         syncCurrentTime(event.target)
       }
     }
@@ -173,7 +182,25 @@ function useYoutubePlayer(videoId: string) {
     }
   }
 
-  return { currentMs, hasTimelineStarted, seekToMs }
+  const togglePlayPause = () => {
+    const player = playerRef.current
+    if (!player) return
+
+    try {
+      if (isPlaying) {
+        player.pauseVideo()
+        setIsPlaying(false)
+        return
+      }
+
+      player.playVideo()
+      setIsPlaying(true)
+    } catch {
+      return
+    }
+  }
+
+  return { currentMs, hasTimelineStarted, isPlaying, seekToMs, togglePlayPause }
 }
 
 function getLocalizedText(value: LocalizedText, locale: Locale) {
@@ -267,9 +294,13 @@ export function MusicDetailClient({
   showQuizLink?: boolean
   sameArtistMusic?: MusicItem[]
 }) {
-  const { currentMs, hasTimelineStarted, seekToMs } = useYoutubePlayer(
-    item.youtubeId,
-  )
+  const {
+    currentMs,
+    hasTimelineStarted,
+    isPlaying,
+    seekToMs,
+    togglePlayPause,
+  } = useYoutubePlayer(item.youtubeId)
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
   const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const vocabScrollRef = useRef<HTMLDivElement | null>(null)
@@ -297,8 +328,30 @@ export function MusicDetailClient({
   const selectedLineVocabs = selectedLine
     ? item.vocab.filter((vocab) => vocab.lineId === selectedLine.id)
     : []
-  const isSparseVocabPanel =
-    selectedLineVocabs.length > 0 && selectedLineVocabs.length <= 2
+  const isRoomyVocabPanel =
+    selectedLineVocabs.length > 0 && selectedLineVocabs.length <= 4
+  const activeLineIndex = activeLine
+    ? item.lyrics.findIndex((line) => line.id === activeLine.id)
+    : -1
+  const canSeekPreviousLine = activeLineIndex > 0
+  const canSeekNextLine =
+    item.lyrics.length > 0 && activeLineIndex < item.lyrics.length - 1
+
+  const seekRelativeLine = (direction: 'previous' | 'next') => {
+    if (item.lyrics.length === 0) return
+
+    const nextIndex =
+      direction === 'previous'
+        ? Math.max(0, activeLineIndex - 1)
+        : activeLineIndex === -1
+          ? 0
+          : Math.min(item.lyrics.length - 1, activeLineIndex + 1)
+    const nextLine = item.lyrics[nextIndex]
+
+    if (nextLine) {
+      seekToMs(nextLine.atMs)
+    }
+  }
 
   useEffect(() => {
     const container = lyricsContainerRef.current
@@ -437,6 +490,77 @@ export function MusicDetailClient({
               </div>
             ) : null}
           </div>
+          <div className="mt-3 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => seekRelativeLine('previous')}
+              disabled={!canSeekPreviousLine}
+              aria-label="上一句"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border disabled:hover:text-foreground"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 20V4" />
+                <path d="m15 19-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={togglePlayPause}
+              aria-label={isPlaying ? '暫停' : '開始'}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-brand text-white shadow-sm transition hover:bg-brand-strong hover:shadow-md"
+            >
+              {isPlaying ? (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="currentColor"
+                >
+                  <path d="M7 5h4v14H7z" />
+                  <path d="M13 5h4v14h-4z" />
+                </svg>
+              ) : (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="ml-0.5 h-5 w-5"
+                  fill="currentColor"
+                >
+                  <path d="m8 5 11 7-11 7z" />
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => seekRelativeLine('next')}
+              disabled={!canSeekNextLine}
+              aria-label="下一句"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border disabled:hover:text-foreground"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 4v16" />
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+          </div>
           <div className="mt-4 min-w-0 overflow-hidden rounded-[18px] border border-border bg-brand-soft/60 p-2.5 lg:mt-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="font-heading text-base font-bold">
@@ -481,7 +605,7 @@ export function MusicDetailClient({
                       exampleTranslation,
                     })
                     const cardPadding = density === 'tiny' ? 'p-1.5' : 'p-2'
-                    const wordClass = isSparseVocabPanel
+                    const wordClass = isRoomyVocabPanel
                       ? density === 'tiny'
                         ? 'text-xs leading-tight'
                         : density === 'compact'
@@ -492,7 +616,7 @@ export function MusicDetailClient({
                         : density === 'compact'
                           ? 'text-xs leading-tight'
                           : 'text-[15px] leading-tight'
-                    const furiganaClass = isSparseVocabPanel
+                    const furiganaClass = isRoomyVocabPanel
                       ? density === 'tiny'
                         ? 'text-[10px]'
                         : 'text-xs'
@@ -501,7 +625,7 @@ export function MusicDetailClient({
                         : density === 'compact'
                           ? 'text-[11px]'
                           : 'text-xs'
-                    const bodyClass = isSparseVocabPanel
+                    const bodyClass = isRoomyVocabPanel
                       ? density === 'tiny'
                         ? 'text-[10px] leading-[1.08]'
                         : density === 'compact'
@@ -513,7 +637,7 @@ export function MusicDetailClient({
                           ? 'text-[11px] leading-tight'
                           : 'text-[13px] leading-snug'
                     const bodyGap = density === 'normal' ? 'gap-0.5' : 'gap-px'
-                    const cardWidth = isSparseVocabPanel
+                    const cardWidth = isRoomyVocabPanel
                       ? selectedLineVocabs.length === 1
                         ? 'w-full max-w-[520px]'
                         : 'w-[min(78vw,420px)]'

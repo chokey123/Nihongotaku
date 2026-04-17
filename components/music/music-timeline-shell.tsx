@@ -13,6 +13,8 @@ import { useEditableMusicEntry } from '@/components/music/use-editable-music-ent
 interface YoutubePlayer {
   destroy: () => void
   getCurrentTime: () => number
+  pauseVideo: () => void
+  playVideo: () => void
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void
 }
 
