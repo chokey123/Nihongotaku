@@ -403,13 +403,15 @@ export function MusicDetailClient({
               </h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
-                {item.genre}
-              </span>
+              {showQuizLink ? (
+                <span className="text-sm font-semibold text-muted">
+                  想知道自己學會了嗎？
+                </span>
+              ) : null}
               {showQuizLink ? (
                 <Link
                   href={`/${locale}/music/quiz/${item.id}`}
-                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
+                  className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-strong hover:shadow-md"
                 >
                   {dict.sections.quiz}
                 </Link>
@@ -639,7 +641,7 @@ export function MusicDetailClient({
                   <p className="break-words font-heading text-base font-bold">
                     {line.japanese}
                   </p>
-                  <p className="mt-1.5 break-words text-xs text-muted">
+                  <p className="mt-1.5 break-words text-sm leading-relaxed text-muted">
                     {getLocalizedText(line.translation, locale)}
                   </p>
                 </div>
