@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
@@ -201,17 +201,17 @@ function getVocabCardDensity({
     exampleTranslation.length
 
   if (
-    contentLength > 150 ||
-    example.length > 68 ||
-    exampleTranslation.length > 68
+    contentLength > 118 ||
+    example.length > 48 ||
+    exampleTranslation.length > 48
   ) {
     return 'tiny'
   }
 
   if (
-    contentLength > 105 ||
-    example.length > 48 ||
-    exampleTranslation.length > 48
+    contentLength > 76 ||
+    example.length > 32 ||
+    exampleTranslation.length > 32
   ) {
     return 'compact'
   }
@@ -271,6 +271,11 @@ export function MusicDetailClient({
   )
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
   const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const vocabScrollRef = useRef<HTMLDivElement | null>(null)
+  const [vocabScrollState, setVocabScrollState] = useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  })
 
   const activeLine = useMemo(() => {
     if (!hasTimelineStarted || item.lyrics.length === 0) {
@@ -314,6 +319,78 @@ export function MusicDetailClient({
     })
   }, [activeLine])
 
+  const syncVocabScrollState = useCallback(() => {
+    const container = vocabScrollRef.current
+
+    if (!container) {
+      return
+    }
+
+    const maxScrollLeft = container.scrollWidth - container.clientWidth
+
+    setVocabScrollState({
+      canScrollLeft: container.scrollLeft > 1,
+      canScrollRight: maxScrollLeft - container.scrollLeft > 1,
+    })
+  }, [])
+
+  useEffect(() => {
+    const container = vocabScrollRef.current
+
+    if (!container) {
+      return
+    }
+
+    container.scrollTo({ left: 0 })
+    const frameId = window.requestAnimationFrame(syncVocabScrollState)
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [activeLine?.id, selectedLineVocabs.length, syncVocabScrollState])
+
+  const scrollVocabCards = (direction: 'left' | 'right') => {
+    const container = vocabScrollRef.current
+    if (!container) return
+
+    const cards = Array.from(container.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    )
+    if (cards.length === 0) return
+
+    const maxScrollLeft = container.scrollWidth - container.clientWidth
+    const currentIndex =
+      container.scrollLeft <= 1
+        ? 0
+        : maxScrollLeft - container.scrollLeft <= 1
+          ? cards.length - 1
+          : cards.reduce((closestIndex, card, index) => {
+              const visibleCenter = container.scrollLeft + container.clientWidth / 2
+              const closestCard = cards[closestIndex]
+              const cardCenter = card.offsetLeft + card.offsetWidth / 2
+              const closestCenter =
+                closestCard.offsetLeft + closestCard.offsetWidth / 2
+
+              return Math.abs(cardCenter - visibleCenter) <
+                Math.abs(closestCenter - visibleCenter)
+                ? index
+                : closestIndex
+            }, 0)
+
+    const nextIndex =
+      direction === 'left'
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(cards.length - 1, currentIndex + 1)
+    const nextCard = cards[nextIndex]
+    const nextLeft =
+      nextCard.offsetLeft - (container.clientWidth - nextCard.offsetWidth) / 2
+
+    container.scrollTo({
+      left: Math.max(0, Math.min(maxScrollLeft, nextLeft)),
+      behavior: 'smooth',
+    })
+
+    window.setTimeout(syncVocabScrollState, 260)
+  }
+
   return (
     <div className="min-w-0 overflow-x-hidden space-y-12">
       <div className="min-w-0 space-y-6 overflow-x-hidden">
@@ -343,7 +420,7 @@ export function MusicDetailClient({
             <div id="music-player-frame" className="aspect-video w-full" />
             {activeLine ? (
               <div className="pointer-events-none absolute inset-x-3 bottom-[18%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[16%]">
-                <div className="max-w-[92%] rounded-lg bg-neutral-900/22 px-4 py-2 text-center shadow-sm backdrop-blur-[1px]">
+                <div className="max-w-[92%] text-center">
                   <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
                     {activeLine.japanese}
                   </p>
@@ -367,9 +444,24 @@ export function MusicDetailClient({
               </div>
               {selectedLineVocabs.length > 0 ? (
                 <div
-                  className={`flex h-[128px] min-w-0 items-stretch gap-2 overflow-x-scroll overflow-y-hidden pb-3 sm:h-[120px] lg:h-[112px] ${
+                  className="group/vocab-scroll relative"
+                >
+                {vocabScrollState.canScrollLeft ? (
+                  <button
+                    type="button"
+                    onClick={() => scrollVocabCards('left')}
+                    aria-label="Scroll vocab cards left"
+                    className="absolute left-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
+                  >
+                    ‹
+                  </button>
+                ) : null}
+                <div
+                  ref={vocabScrollRef}
+                  onScroll={syncVocabScrollState}
+                  className={`flex h-[136px] min-w-0 items-stretch gap-2 overflow-x-scroll overflow-y-hidden pb-3 [scrollbar-color:rgba(100,116,139,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-500/45 [&::-webkit-scrollbar-track]:bg-transparent sm:h-[132px] lg:h-[148px] ${
                     selectedLineVocabs.length === 1
-                      ? 'justify-center'
+                      ? 'justify-start sm:justify-center'
                       : 'justify-start'
                   }`}
                 >
@@ -389,19 +481,19 @@ export function MusicDetailClient({
                     const cardPadding = density === 'tiny' ? 'p-1.5' : 'p-2'
                     const wordClass = isSparseVocabPanel
                       ? density === 'tiny'
-                        ? 'text-sm leading-tight'
-                        : density === 'compact'
-                          ? 'text-[15px] leading-tight'
-                          : 'text-base leading-tight'
-                      : density === 'tiny'
-                        ? 'text-[13px] leading-tight'
+                        ? 'text-xs leading-tight'
                         : density === 'compact'
                           ? 'text-sm leading-tight'
+                          : 'text-base leading-tight'
+                      : density === 'tiny'
+                        ? 'text-[11px] leading-tight'
+                        : density === 'compact'
+                          ? 'text-xs leading-tight'
                           : 'text-[15px] leading-tight'
                     const furiganaClass =
                       isSparseVocabPanel
                         ? density === 'tiny'
-                          ? 'text-[11px]'
+                          ? 'text-[10px]'
                           : 'text-xs'
                         : density === 'tiny'
                           ? 'text-[10px]'
@@ -411,14 +503,14 @@ export function MusicDetailClient({
                     const bodyClass =
                       isSparseVocabPanel
                         ? density === 'tiny'
-                          ? 'text-xs leading-tight'
-                          : density === 'compact'
-                            ? 'text-[13px] leading-tight'
-                            : 'text-sm leading-snug'
-                        : density === 'tiny'
-                          ? 'text-[11px] leading-tight'
+                          ? 'text-[10px] leading-[1.08]'
                           : density === 'compact'
                             ? 'text-xs leading-tight'
+                            : 'text-sm leading-snug'
+                        : density === 'tiny'
+                          ? 'text-[9px] leading-[1.05]'
+                          : density === 'compact'
+                            ? 'text-[11px] leading-tight'
                             : 'text-[13px] leading-snug'
                     const bodyGap = density === 'normal' ? 'gap-0.5' : 'gap-px'
                     const cardWidth = isSparseVocabPanel
@@ -430,11 +522,11 @@ export function MusicDetailClient({
                     return (
                       <article
                         key={vocab.id}
-                        className={`flex h-full ${cardWidth} max-sm:w-max max-sm:min-w-[220px] shrink-0 flex-col overflow-hidden rounded-[12px] bg-surface-strong ${cardPadding}`}
+                        className={`flex h-full ${cardWidth} max-sm:min-w-[220px] shrink-0 flex-col overflow-hidden rounded-[12px] bg-surface-strong ${cardPadding}`}
                       >
                         <div className="flex min-w-0 items-start justify-between gap-2">
                           <h3
-                            className={`min-w-0 break-words font-heading font-bold max-sm:min-w-max max-sm:break-normal max-sm:whitespace-nowrap ${wordClass}`}
+                            className={`min-w-0 break-words font-heading font-bold ${wordClass}`}
                           >
                             {vocab.word}
                           </h3>
@@ -448,18 +540,18 @@ export function MusicDetailClient({
                           className={`mt-1 flex min-h-0 flex-1 flex-col justify-evenly ${bodyGap}`}
                         >
                           <p
-                            className={`break-words font-semibold text-brand-strong max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                            className={`break-words font-semibold text-brand-strong ${bodyClass}`}
                           >
                             {meaning}
                           </p>
                           <p
-                            className={`break-words text-muted max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                            className={`break-words text-muted ${bodyClass}`}
                           >
                             {vocab.example}
                           </p>
                           {exampleTranslation ? (
                             <p
-                              className={`break-words text-muted/80 max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                              className={`break-words text-muted/80 ${bodyClass}`}
                             >
                               {exampleTranslation}
                             </p>
@@ -469,8 +561,19 @@ export function MusicDetailClient({
                     )
                   })}
                 </div>
+                {vocabScrollState.canScrollRight ? (
+                  <button
+                    type="button"
+                    onClick={() => scrollVocabCards('right')}
+                    aria-label="Scroll vocab cards right"
+                    className="absolute right-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
+                  >
+                    ›
+                  </button>
+                ) : null}
+                </div>
               ) : (
-                <div className="flex h-[128px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[120px] lg:h-[112px]">
+                <div className="flex h-[136px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[132px] lg:h-[148px]">
                   {selectedLine
                     ? vocabPanelCopy[locale].noVocab
                     : vocabPanelCopy[locale].notStarted}

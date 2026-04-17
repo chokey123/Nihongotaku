@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
+import { startNavigationFeedback } from '@/components/providers/navigation-feedback'
 import type { MusicItem } from '@/lib/types'
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 
@@ -83,6 +84,7 @@ export function MusicCard({
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
+                startNavigationFeedback()
                 router.push(quizHref)
               }}
               className="text-left text-xs font-semibold text-brand-strong transition hover:text-brand"
@@ -112,11 +114,13 @@ export function MusicCard({
       role="link"
       tabIndex={0}
       onClick={() => {
+        startNavigationFeedback()
         router.push(detailHref)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
+          startNavigationFeedback()
           router.push(detailHref)
         }
       }}
