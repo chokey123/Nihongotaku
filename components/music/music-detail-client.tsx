@@ -5,6 +5,7 @@ import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
 import type { Locale, LocalizedText, MusicItem } from '@/lib/types'
+import { MusicCard } from '@/components/ui/music-card'
 
 interface YoutubePlayer {
   destroy: () => void
@@ -48,6 +49,7 @@ declare global {
 
 function useYoutubePlayer(videoId: string) {
   const [currentMs, setCurrentMs] = useState(0)
+  const [hasTimelineStarted, setHasTimelineStarted] = useState(false)
   const playerRef = useRef<YoutubePlayer | null>(null)
   const intervalRef = useRef<number | null>(null)
 
@@ -56,7 +58,11 @@ function useYoutubePlayer(videoId: string) {
       try {
         const seconds = player.getCurrentTime()
         if (Number.isFinite(seconds)) {
-          setCurrentMs(Math.floor(seconds * 1000))
+          const nextMs = Math.floor(seconds * 1000)
+          setCurrentMs(nextMs)
+          if (nextMs > 0) {
+            setHasTimelineStarted(true)
+          }
         }
       } catch {
         return
@@ -83,6 +89,7 @@ function useYoutubePlayer(videoId: string) {
     const handleReady = (event: YoutubePlayerEvent) => {
       playerRef.current = event.target
       setCurrentMs(0)
+      setHasTimelineStarted(false)
       startPolling()
       syncCurrentTime(event.target)
     }
@@ -160,50 +167,136 @@ function useYoutubePlayer(videoId: string) {
     try {
       player.seekTo(nextMs / 1000, true)
       setCurrentMs(nextMs)
+      setHasTimelineStarted(true)
     } catch {
       return
     }
   }
 
-  return { currentMs, seekToMs }
+  return { currentMs, hasTimelineStarted, seekToMs }
 }
 
 function getLocalizedText(value: LocalizedText, locale: Locale) {
   return value[locale] ?? value.zh ?? value.en ?? value.ja ?? ''
 }
 
+function getVocabCardDensity({
+  word,
+  furigana,
+  meaning,
+  example,
+  exampleTranslation,
+}: {
+  word: string
+  furigana: string
+  meaning: string
+  example: string
+  exampleTranslation: string
+}) {
+  const contentLength =
+    word.length +
+    furigana.length +
+    meaning.length +
+    example.length +
+    exampleTranslation.length
+
+  if (
+    contentLength > 150 ||
+    example.length > 68 ||
+    exampleTranslation.length > 68
+  ) {
+    return 'tiny'
+  }
+
+  if (
+    contentLength > 105 ||
+    example.length > 48 ||
+    exampleTranslation.length > 48
+  ) {
+    return 'compact'
+  }
+
+  return 'normal'
+}
+
+const sameArtistCopy = {
+  zh: {
+    eyebrow: '同歌手',
+    title: (artist: string) => `${artist} 的更多歌曲`,
+    description: '繼續聽同一位歌手的其他歌曲。',
+  },
+  en: {
+    eyebrow: 'Same artist',
+    title: (artist: string) => `More music by ${artist}`,
+    description: 'Keep listening to more songs from this artist.',
+  },
+  ja: {
+    eyebrow: '同じアーティスト',
+    title: (artist: string) => `${artist} の他の曲`,
+    description: '同じアーティストの曲を続けて聴けます。',
+  },
+} as const
+
+const vocabPanelCopy = {
+  zh: {
+    notStarted: '歌曲還沒開始，單詞卡會跟著歌詞顯示。',
+    noVocab: '這句歌詞目前沒有指定單詞卡。',
+  },
+  en: {
+    notStarted:
+      'The song has not started yet. Vocab cards will follow the lyrics.',
+    noVocab: 'No vocab cards are assigned to this lyric line yet.',
+  },
+  ja: {
+    notStarted: '曲はまだ始まっていません。単語カードは歌詞に合わせて表示されます。',
+    noVocab: 'この歌詞にはまだ単語カードがありません。',
+  },
+} as const
+
 export function MusicDetailClient({
   item,
   dict,
   locale,
   showQuizLink = true,
+  sameArtistMusic = [],
 }: {
   item: MusicItem
   dict: Dictionary
   locale: Locale
   showQuizLink?: boolean
+  sameArtistMusic?: MusicItem[]
 }) {
-  const { currentMs, seekToMs } = useYoutubePlayer(item.youtubeId)
+  const { currentMs, hasTimelineStarted, seekToMs } = useYoutubePlayer(
+    item.youtubeId,
+  )
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
   const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const activeLine = useMemo(() => {
+    if (!hasTimelineStarted || item.lyrics.length === 0) {
+      return null
+    }
+
+    const firstLine = item.lyrics[0]
+    if (!firstLine || currentMs < firstLine.atMs) {
+      return null
+    }
+
     return (
-      [...item.lyrics].reverse().find((line) => currentMs >= line.atMs) ??
-      item.lyrics[0]
+      [...item.lyrics].reverse().find((line) => currentMs >= line.atMs) ?? null
     )
-  }, [currentMs, item.lyrics])
+  }, [currentMs, hasTimelineStarted, item.lyrics])
 
   const selectedLine = activeLine
   const selectedLineVocabs = selectedLine
     ? item.vocab.filter((vocab) => vocab.lineId === selectedLine.id)
     : []
+  const isSparseVocabPanel =
+    selectedLineVocabs.length > 0 && selectedLineVocabs.length <= 2
 
   useEffect(() => {
     const container = lyricsContainerRef.current
-    const activeCard = activeLine
-      ? lyricLineRefs.current[activeLine.id]
-      : null
+    const activeCard = activeLine ? lyricLineRefs.current[activeLine.id] : null
 
     if (!container || !activeCard) return
 
@@ -222,153 +315,262 @@ export function MusicDetailClient({
   }, [activeLine])
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.28fr_0.72fr]">
-      <section className="glass-panel rounded-[32px] border border-border p-5">
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted">{item.artist}</p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight">
-              {item.title}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
-              {item.genre}
-            </span>
-            {showQuizLink ? (
-              <Link
-                href={`/${locale}/music/quiz/${item.id}`}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
-              >
-                {dict.sections.quiz}
-              </Link>
-            ) : null}
-          </div>
-        </div>
-        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-[26px] border border-border sm:max-w-xl md:max-w-2xl lg:max-w-none">
-          <div
-            id="music-player-frame"
-            className="aspect-[4/3] w-full sm:aspect-video lg:aspect-[16/9]"
-          />
-        </div>
-        {activeLine ? (
-          <div className="mt-4 rounded-[24px] border border-border bg-surface p-4 lg:hidden">
-            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-              <span className="font-semibold text-brand-strong">
-                {activeLine.timeLabel}
-              </span>
-              <span className="text-muted">{dict.sections.lyrics}</span>
+    <div className="min-w-0 overflow-x-hidden space-y-12">
+      <div className="min-w-0 space-y-6 overflow-x-hidden">
+        <section className="glass-panel flex min-w-0 flex-col overflow-hidden rounded-[28px] border border-border p-4">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted">{item.artist}</p>
+              <h1 className="font-heading text-3xl font-bold tracking-tight">
+                {item.title}
+              </h1>
             </div>
-            <p className="font-heading text-lg font-bold">{activeLine.japanese}</p>
-            <p className="mt-2 text-sm text-muted">
-              {getLocalizedText(activeLine.translation, locale)}
-            </p>
-          </div>
-        ) : null}
-        <div className="mt-5 rounded-[24px] border border-border bg-brand-soft/60 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="font-heading text-lg font-bold">
-              {dict.sections.vocab}
-            </h2>
-            <span className="text-sm text-muted">
-              {selectedLine?.timeLabel}
-            </span>
-          </div>
-          {selectedLineVocabs.length ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {selectedLineVocabs.map((vocab) => (
-                <article
-                  key={vocab.id}
-                  className="rounded-[22px] bg-surface-strong p-4"
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="rounded-full bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong">
+                {item.genre}
+              </span>
+              {showQuizLink ? (
+                <Link
+                  href={`/${locale}/music/quiz/${item.id}`}
+                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold transition hover:border-brand"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-heading text-lg font-bold">
-                      {vocab.word}
-                    </h3>
-                    <span className="text-sm text-muted">{vocab.furigana}</span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-brand-strong">
-                    {getLocalizedText(vocab.meaning, locale)}
+                  {dict.sections.quiz}
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[26px] border border-border lg:max-w-[1280px]">
+            <div id="music-player-frame" className="aspect-video w-full" />
+            {activeLine ? (
+              <div className="pointer-events-none absolute inset-x-3 bottom-[18%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[16%]">
+                <div className="max-w-[92%] rounded-lg bg-neutral-900/22 px-4 py-2 text-center shadow-sm backdrop-blur-[1px]">
+                  <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
+                    {activeLine.japanese}
                   </p>
-                  <p className="mt-3 text-sm text-muted">{vocab.example}</p>
-                  {getLocalizedText(vocab.exampleTranslation, locale) ? (
-                    <p className="mt-2 text-sm text-muted/80">
-                      {getLocalizedText(vocab.exampleTranslation, locale)}
+                  {getLocalizedText(activeLine.translation, locale) ? (
+                    <p className="mt-1 text-xs leading-snug text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-sm">
+                      {getLocalizedText(activeLine.translation, locale)}
                     </p>
                   ) : null}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-[22px] border border-dashed border-border bg-surface-strong px-4 py-6 text-sm text-muted">
-              {dict.labels.noVocab}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="glass-panel rounded-[32px] border border-border p-5">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="font-heading text-xl font-bold">
-            {dict.sections.lyrics}
-          </h2>
-          <span className="text-sm text-muted">{activeLine?.timeLabel}</span>
-        </div>
-        <div
-          ref={lyricsContainerRef}
-          className="flex max-h-[760px] flex-col gap-3 overflow-auto pr-1"
-        >
-          {item.lyrics.map((line) => {
-            const isActive = activeLine?.id === line.id
-
-            return (
-              <div
-                key={line.id}
-                ref={(node) => {
-                  lyricLineRefs.current[line.id] = node
-                }}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  const selection = window.getSelection()
-                  if (selection && !selection.isCollapsed) {
-                    return
-                  }
-
-                  seekToMs(line.atMs)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    seekToMs(line.atMs)
-                  }
-                }}
-                className={`cursor-pointer select-text rounded-[24px] border p-4 text-left transition ${
-                  isActive
-                    ? 'border-brand bg-brand-soft'
-                    : 'border-border bg-surface hover:border-brand'
-                } ${isActive ? 'translate-x-1 scale-[1.01]' : ''}`}
-              >
-                <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-brand-strong">
-                    {line.timeLabel}
-                  </span>
-                  <span className="text-muted">
-                    {item.vocab.filter((vocab) => vocab.lineId === line.id).length}{' '}
-                    {dict.sections.vocab}
-                  </span>
                 </div>
-                <p className="font-heading text-lg font-bold">
-                  {line.japanese}
-                </p>
-                <p className="mt-2 text-sm text-muted">
-                  {getLocalizedText(line.translation, locale)}
-                </p>
               </div>
-            )
-          })}
-        </div>
-      </section>
+            ) : null}
+          </div>
+          <div className="mt-4 min-w-0 overflow-hidden rounded-[18px] border border-border bg-brand-soft/60 p-2.5 lg:mt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="font-heading text-base font-bold">
+                  {dict.sections.vocab}
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <span>{selectedLine?.timeLabel}</span>
+                </div>
+              </div>
+              {selectedLineVocabs.length > 0 ? (
+                <div
+                  className={`flex h-[128px] min-w-0 items-stretch gap-2 overflow-x-scroll overflow-y-hidden pb-3 sm:h-[120px] lg:h-[112px] ${
+                    selectedLineVocabs.length === 1
+                      ? 'justify-center'
+                      : 'justify-start'
+                  }`}
+                >
+                  {selectedLineVocabs.map((vocab) => {
+                    const meaning = getLocalizedText(vocab.meaning, locale)
+                    const exampleTranslation = getLocalizedText(
+                      vocab.exampleTranslation,
+                      locale,
+                    )
+                    const density = getVocabCardDensity({
+                      word: vocab.word,
+                      furigana: vocab.furigana,
+                      meaning,
+                      example: vocab.example,
+                      exampleTranslation,
+                    })
+                    const cardPadding = density === 'tiny' ? 'p-1.5' : 'p-2'
+                    const wordClass = isSparseVocabPanel
+                      ? density === 'tiny'
+                        ? 'text-sm leading-tight'
+                        : density === 'compact'
+                          ? 'text-[15px] leading-tight'
+                          : 'text-base leading-tight'
+                      : density === 'tiny'
+                        ? 'text-[13px] leading-tight'
+                        : density === 'compact'
+                          ? 'text-sm leading-tight'
+                          : 'text-[15px] leading-tight'
+                    const furiganaClass =
+                      isSparseVocabPanel
+                        ? density === 'tiny'
+                          ? 'text-[11px]'
+                          : 'text-xs'
+                        : density === 'tiny'
+                          ? 'text-[10px]'
+                          : density === 'compact'
+                            ? 'text-[11px]'
+                            : 'text-xs'
+                    const bodyClass =
+                      isSparseVocabPanel
+                        ? density === 'tiny'
+                          ? 'text-xs leading-tight'
+                          : density === 'compact'
+                            ? 'text-[13px] leading-tight'
+                            : 'text-sm leading-snug'
+                        : density === 'tiny'
+                          ? 'text-[11px] leading-tight'
+                          : density === 'compact'
+                            ? 'text-xs leading-tight'
+                            : 'text-[13px] leading-snug'
+                    const bodyGap = density === 'normal' ? 'gap-0.5' : 'gap-px'
+                    const cardWidth = isSparseVocabPanel
+                      ? selectedLineVocabs.length === 1
+                        ? 'w-full max-w-[520px]'
+                        : 'w-[min(78vw,420px)]'
+                      : 'w-[220px] sm:w-[250px] lg:w-[270px]'
+
+                    return (
+                      <article
+                        key={vocab.id}
+                        className={`flex h-full ${cardWidth} max-sm:w-max max-sm:min-w-[220px] shrink-0 flex-col overflow-hidden rounded-[12px] bg-surface-strong ${cardPadding}`}
+                      >
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                          <h3
+                            className={`min-w-0 break-words font-heading font-bold max-sm:min-w-max max-sm:break-normal max-sm:whitespace-nowrap ${wordClass}`}
+                          >
+                            {vocab.word}
+                          </h3>
+                          <span
+                            className={`shrink-0 pt-0.5 text-muted ${furiganaClass}`}
+                          >
+                            {vocab.furigana}
+                          </span>
+                        </div>
+                        <div
+                          className={`mt-1 flex min-h-0 flex-1 flex-col justify-evenly ${bodyGap}`}
+                        >
+                          <p
+                            className={`break-words font-semibold text-brand-strong max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                          >
+                            {meaning}
+                          </p>
+                          <p
+                            className={`break-words text-muted max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                          >
+                            {vocab.example}
+                          </p>
+                          {exampleTranslation ? (
+                            <p
+                              className={`break-words text-muted/80 max-sm:w-max max-sm:break-normal max-sm:whitespace-nowrap ${bodyClass}`}
+                            >
+                              {exampleTranslation}
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-[128px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[120px] lg:h-[112px]">
+                  {selectedLine
+                    ? vocabPanelCopy[locale].noVocab
+                    : vocabPanelCopy[locale].notStarted}
+                </div>
+              )}
+            </div>
+        </section>
+
+        <section className="glass-panel min-w-0 overflow-hidden rounded-[28px] border border-border p-4">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <h2 className="font-heading text-lg font-bold">
+              {dict.sections.lyrics}
+            </h2>
+            <span className="text-xs text-muted">{activeLine?.timeLabel}</span>
+          </div>
+          <div
+            ref={lyricsContainerRef}
+            className="flex max-h-[680px] min-w-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden pr-1"
+          >
+            {item.lyrics.map((line) => {
+              const isActive = activeLine?.id === line.id
+
+              return (
+                <div
+                  key={line.id}
+                  ref={(node) => {
+                    lyricLineRefs.current[line.id] = node
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    const selection = window.getSelection()
+                    if (selection && !selection.isCollapsed) {
+                      return
+                    }
+
+                    seekToMs(line.atMs)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      seekToMs(line.atMs)
+                    }
+                  }}
+                  className={`min-w-0 max-w-full cursor-pointer select-text rounded-[18px] border p-3 text-left transition ${
+                    isActive
+                      ? 'border-brand bg-brand-soft shadow-sm'
+                      : 'border-border bg-surface hover:border-brand'
+                  }`}
+                >
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-brand-strong">
+                      {line.timeLabel}
+                    </span>
+                    <span className="text-muted">
+                      {
+                        item.vocab.filter((vocab) => vocab.lineId === line.id)
+                          .length
+                      }{' '}
+                      {dict.sections.vocab}
+                    </span>
+                  </div>
+                  <p className="break-words font-heading text-base font-bold">
+                    {line.japanese}
+                  </p>
+                  <p className="mt-1.5 break-words text-xs text-muted">
+                    {getLocalizedText(line.translation, locale)}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      </div>
+
+      {sameArtistMusic.length > 0 ? (
+        <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-strong">
+              {sameArtistCopy[locale].eyebrow}
+            </p>
+            <h2 className="mt-2 font-heading text-2xl font-bold tracking-tight">
+              {sameArtistCopy[locale].title(item.artist)}
+            </h2>
+            <p className="mt-2 text-sm text-muted">
+              {sameArtistCopy[locale].description}
+            </p>
+          </div>
+          <div className="flex min-w-0 gap-5 overflow-x-auto pb-3">
+            {sameArtistMusic.map((music) => (
+              <div
+                key={music.id}
+                className="w-[280px] shrink-0 sm:w-[320px] lg:w-[340px]"
+              >
+                <MusicCard item={music} locale={locale} />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }

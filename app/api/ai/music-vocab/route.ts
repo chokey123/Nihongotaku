@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 
 import type { AIMusicVocabQuota, AIMusicVocabSuggestion } from '@/lib/types'
 
-const GEMINI_MODEL = 'gemini-2.5-flash-lite'
+const GEMINI_MODEL = 'gemini-3-flash-preview'
 const DAILY_LIMIT = 5
 
 interface AiMusicVocabDailyUsageRow {
@@ -71,22 +71,23 @@ function getTodayUtc() {
 
 function buildPrompt(lyrics: Array<{ lineId: string; japanese: string }>) {
   return JSON.stringify({
-    task: 'Generate vocabulary suggestions for Japanese song lyrics.',
+    task: 'Generate vocabulary & grammar introduction from Japanese song lyrics.',
     requirements: [
-      'For each lyric line, find 0 to 3 vocab that is worth learning.',
+      'For each lyric line, always find 1 to 3 vocab that is worth learning.',
       'Return vocab grouped by the original lineId.',
-      'For verb, transform to original surface form if appropriate, do not simply copy from original lyics.',
+      'For verb, transform to original surface form if appropriate',
       'For any vocab do not simply copy from original lyics.',
       'If appropriate, also pick grammar and fit in the higrana as furigana, example and exampleTranslationZh.',
+      'For example of grammar, In case of 教えてほしい, 教える should be the verb, ～てほしい should be the grammar to introduce.',
       'furigana must be accurate and readable in hiragana.',
       'difficulty must be exactly one of: beginner, intermediate, hard.',
-      'Use intermediate as the default when uncertain.',
       'example must be a natural Japanese sentence that is good for learning.',
       'exampleTranslationZh must be exact translation of example in natural Traditional Chinese.',
       'meaningZh must be concise Traditional Chinese.',
       'Only return items for lines that have meaningful Japanese text.',
-      'Do not include duplicate vocab unless there are duplicate lyrics.',
-      'If there is multiple line with same lyrics (e.g. chorus) can have same output.',
+      'Do not include duplicate vocab in exact same line of lyrics.',
+      'If there is multiple line with same lyrics can have same vocab output.',
+      'Do not hesitate to generate as many vocab & grammar to learn as possible.',
       'Return valid JSON only.',
     ],
     lyrics,
@@ -186,17 +187,17 @@ async function getAuthorizedSupabase(request: Request) {
   }
 }
 
-async function getUsageCount(
-  supabase: SupabaseClient,
-  userId: string,
-) {
+async function getUsageCount(supabase: SupabaseClient, userId: string) {
   const usageDate = getTodayUtc()
   const usageTable = supabase.from('ai_music_vocab_daily_usage')
   const { data, error } = (await usageTable
     .select('id, usage_count')
     .eq('user_id', userId)
     .eq('usage_date', usageDate)
-    .maybeSingle()) as { data: AiMusicVocabDailyUsageRow | null; error: { message: string } | null }
+    .maybeSingle()) as {
+    data: AiMusicVocabDailyUsageRow | null
+    error: { message: string } | null
+  }
 
   if (error) {
     throw new Error(error.message)
@@ -304,7 +305,10 @@ export async function POST(request: Request) {
     .filter((line) => line.lineId && line.japanese)
 
   if (lyrics.length === 0) {
-    return Response.json({ suggestions: [], quota: buildQuota(usage.used, authorized.isAdmin) })
+    return Response.json({
+      suggestions: [],
+      quota: buildQuota(usage.used, authorized.isAdmin),
+    })
   }
 
   try {
@@ -332,11 +336,7 @@ export async function POST(request: Request) {
 
     const nextUsed = authorized.isAdmin
       ? usage.used
-      : await incrementUsageCount(
-          authorized.supabase,
-          authorized.userId,
-          usage,
-        )
+      : await incrementUsageCount(authorized.supabase, authorized.userId, usage)
 
     return Response.json({
       suggestions,

@@ -16,9 +16,18 @@ export default async function MusicDetailPage({
 
   if (!music) notFound();
 
+  const sameArtistMusic = (await backendService.searchMusic(""))
+    .filter((item) => item.artist === music.artist && item.id !== music.id)
+    .slice(0, 6);
+
   return (
     <div className="pb-10">
-      <MusicDetailClient item={music} dict={dict} locale={lang as Locale} />
+      <MusicDetailClient
+        item={music}
+        dict={dict}
+        locale={lang as Locale}
+        sameArtistMusic={sameArtistMusic}
+      />
     </div>
   );
 }

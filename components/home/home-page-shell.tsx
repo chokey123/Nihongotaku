@@ -323,7 +323,7 @@ export function HomePageShell({
         </div>
       </section>
 
-      <div className="sticky top-20 z-30 -mx-1 px-1 py-2 backdrop-blur">
+      <div className="sticky top-0 z-30 -mx-1 px-1 pb-2 pt-2 backdrop-blur">
         <form
           onSubmit={(event) => {
             event.preventDefault()
