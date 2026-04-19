@@ -14,6 +14,8 @@ export function buildMusicDraftPayloadFromItem(
     quizVocabKeys: item.quizVocabKeys,
     submissionSource: item.submissionSource,
     reviewRequestedAt: item.reviewRequestedAt ?? null,
+    lyricsSourceText: item.lyricsSourceText ?? null,
+    lyricsSourceUrl: item.lyricsSourceUrl ?? null,
     ...overrides,
   }
 }

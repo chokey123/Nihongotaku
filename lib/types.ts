@@ -81,6 +81,8 @@ export interface MusicItem {
   createdAt?: string;
   reviewRequestedAt?: string | null;
   sourceUrl?: string;
+  lyricsSourceText?: string | null;
+  lyricsSourceUrl?: string | null;
   favorite: boolean;
   thumbnailLabel: string;
   palette: {
@@ -148,6 +150,8 @@ export interface MusicDraftPayload {
   quizVocabKeys?: string[];
   submissionSource?: MusicSubmissionSource;
   reviewRequestedAt?: string | null;
+  lyricsSourceText?: string | null;
+  lyricsSourceUrl?: string | null;
 }
 
 export interface ArticleDraftPayload {

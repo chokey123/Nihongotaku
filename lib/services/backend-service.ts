@@ -40,6 +40,8 @@ const MUSIC_SELECT = `
   artist,
   genre,
   source_url,
+  lyrics_source_text,
+  lyrics_source_url,
   youtube_video_id,
   thumbnail_url,
   is_published,
@@ -133,6 +135,8 @@ interface SupabaseMusicRow {
   artist: string
   genre: string
   source_url: string | null
+  lyrics_source_text: string | null
+  lyrics_source_url: string | null
   youtube_video_id: string | null
   thumbnail_url: string | null
   is_published: boolean | null
@@ -467,6 +471,8 @@ function buildMusicItemFromSupabase(row: SupabaseMusicRow): MusicItem {
       (row.youtube_video_id
         ? `https://youtube.com/watch?v=${row.youtube_video_id}`
         : ''),
+    lyricsSourceText: row.lyrics_source_text ?? null,
+    lyricsSourceUrl: row.lyrics_source_url ?? null,
     favorite: false,
     thumbnailLabel: buildThumbnailLabel(row.title),
     palette: buildMusicPalette(`${row.id}-${row.title}`),
@@ -1024,6 +1030,8 @@ export class BackendService {
           artist: payload.artist,
           genre: payload.genre,
           source_url: payload.sourceUrl,
+          lyrics_source_text: payload.lyricsSourceText?.trim() || null,
+          lyrics_source_url: payload.lyricsSourceUrl?.trim() || null,
           youtube_video_id: youtubeId,
           review_requested_at: payload.reviewRequestedAt ?? null,
           submission_source: submissionSource,
@@ -1042,6 +1050,8 @@ export class BackendService {
         artist: payload.artist,
         genre: payload.genre,
         source_url: payload.sourceUrl,
+        lyrics_source_text: payload.lyricsSourceText?.trim() || null,
+        lyrics_source_url: payload.lyricsSourceUrl?.trim() || null,
         youtube_video_id: youtubeId,
         review_requested_at: payload.reviewRequestedAt ?? null,
         submission_source: submissionSource,
@@ -1213,6 +1223,8 @@ export class BackendService {
           exampleTranslation: entry.exampleTranslation,
         })),
         reviewRequestedAt: payload.reviewRequestedAt ?? null,
+        lyricsSourceText: payload.lyricsSourceText?.trim() || null,
+        lyricsSourceUrl: payload.lyricsSourceUrl?.trim() || null,
       },
     }
   }

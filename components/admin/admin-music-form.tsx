@@ -569,6 +569,12 @@ export function AdminMusicForm({
   const [title, setTitle] = useState(initialMusic?.title ?? '')
   const [artist, setArtist] = useState(initialMusic?.artist ?? '')
   const [genre, setGenre] = useState(initialMusic?.genre ?? '')
+  const [lyricsSourceText, setLyricsSourceText] = useState(
+    initialMusic?.lyricsSourceText ?? '',
+  )
+  const [lyricsSourceUrl, setLyricsSourceUrl] = useState(
+    initialMusic?.lyricsSourceUrl ?? '',
+  )
   const [artistSuggestions, setArtistSuggestions] = useState<string[]>([])
   const [genreSuggestions, setGenreSuggestions] = useState<string[]>([])
   const [reviewRequestedAt, setReviewRequestedAt] = useState<string | null>(
@@ -1072,6 +1078,8 @@ export function AdminMusicForm({
       title,
       artist,
       genre,
+      lyricsSourceText: lyricsSourceText.trim() || null,
+      lyricsSourceUrl: lyricsSourceUrl.trim() || null,
       lyrics,
       vocab: vocabs,
       reviewRequestedAt,
@@ -1148,6 +1156,8 @@ export function AdminMusicForm({
           title,
           artist,
           genre,
+          lyricsSourceText: lyricsSourceText.trim() || null,
+          lyricsSourceUrl: lyricsSourceUrl.trim() || null,
           lyrics,
           vocab: vocabs,
           reviewRequestedAt: nextReviewRequestedAt,
@@ -1197,6 +1207,8 @@ export function AdminMusicForm({
       title,
       artist,
       genre,
+      lyricsSourceText: lyricsSourceText.trim() || null,
+      lyricsSourceUrl: lyricsSourceUrl.trim() || null,
       lyrics,
       vocab: vocabs,
       reviewRequestedAt,
@@ -1377,6 +1389,44 @@ export function AdminMusicForm({
             }}
             wrapperClassName="flex w-full items-center rounded-2xl border border-border bg-surface-strong px-4 py-3"
             inputClassName="w-full bg-transparent outline-none"
+          />
+        </FormField>
+        <FormField
+          label={
+            initialLocale === 'en'
+              ? 'Lyrics source'
+              : initialLocale === 'ja'
+                ? '歌詞の出典'
+                : '歌詞來源'
+          }
+        >
+          <input
+            value={lyricsSourceText}
+            onChange={(event) => setLyricsSourceText(event.target.value)}
+            placeholder={
+              initialLocale === 'en'
+                ? 'e.g. Official lyrics, Genius, Uta-Net'
+                : initialLocale === 'ja'
+                  ? '例：公式歌詞、Uta-Net'
+                  : '例如：官方歌詞、Genius、Uta-Net'
+            }
+            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+          />
+        </FormField>
+        <FormField
+          label={
+            initialLocale === 'en'
+              ? 'Lyrics source link'
+              : initialLocale === 'ja'
+                ? '歌詞出典リンク'
+                : '歌詞來源鏈接'
+          }
+        >
+          <input
+            value={lyricsSourceUrl}
+            onChange={(event) => setLyricsSourceUrl(event.target.value)}
+            placeholder="https://"
+            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
         </FormField>
       </div>

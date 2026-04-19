@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
-import type { Locale, LocalizedText, MusicItem } from '@/lib/types'
+import type {
+  Locale,
+  LocalizedText,
+  MusicItem,
+  MusicVocabItem,
+} from '@/lib/types'
 import { MusicCard } from '@/components/ui/music-card'
 
 interface YoutubePlayer {
@@ -127,8 +132,8 @@ function useYoutubePlayer(videoId: string) {
       stopPolling()
       playerRef.current?.destroy()
       playerRef.current = new window.YT.Player('music-player-frame', {
-        height: '390',
-        width: '640',
+        height: '480',
+        width: '1080',
         videoId,
         playerVars: {
           playsinline: 1,
@@ -200,11 +205,39 @@ function useYoutubePlayer(videoId: string) {
     }
   }
 
-  return { currentMs, hasTimelineStarted, isPlaying, seekToMs, togglePlayPause }
+  const play = () => {
+    const player = playerRef.current
+    if (!player) return
+
+    try {
+      player.playVideo()
+      setIsPlaying(true)
+    } catch {
+      return
+    }
+  }
+
+  return {
+    currentMs,
+    hasTimelineStarted,
+    isPlaying,
+    play,
+    seekToMs,
+    togglePlayPause,
+  }
 }
 
 function getLocalizedText(value: LocalizedText, locale: Locale) {
   return value[locale] ?? value.zh ?? value.en ?? value.ja ?? ''
+}
+
+function getExternalHref(value: string) {
+  const trimmed = value.trim()
+
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+
+  return `https://${trimmed}`
 }
 
 function getVocabCardDensity({
@@ -298,12 +331,17 @@ export function MusicDetailClient({
     currentMs,
     hasTimelineStarted,
     isPlaying,
+    play,
     seekToMs,
     togglePlayPause,
   } = useYoutubePlayer(item.youtubeId)
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
   const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const vocabReviewRef = useRef<HTMLElement | null>(null)
   const vocabScrollRef = useRef<HTMLDivElement | null>(null)
+  const [selectedReviewVocabIds, setSelectedReviewVocabIds] = useState<
+    string[]
+  >([])
   const [vocabScrollState, setVocabScrollState] = useState({
     canScrollLeft: false,
     canScrollRight: false,
@@ -328,6 +366,37 @@ export function MusicDetailClient({
   const selectedLineVocabs = selectedLine
     ? item.vocab.filter((vocab) => vocab.lineId === selectedLine.id)
     : []
+  const lyricById = useMemo(
+    () => new Map(item.lyrics.map((line) => [line.id, line])),
+    [item.lyrics],
+  )
+  const defaultReviewVocabs = useMemo(() => {
+    const byDifficulty = {
+      hard: item.vocab.filter((vocab) => vocab.difficulty === 'hard'),
+      intermediate: item.vocab.filter(
+        (vocab) => vocab.difficulty === 'intermediate',
+      ),
+      beginner: item.vocab.filter((vocab) => vocab.difficulty === 'beginner'),
+    }
+
+    return [
+      ...byDifficulty.hard,
+      ...byDifficulty.intermediate,
+      ...byDifficulty.beginner,
+    ].slice(0, 10)
+  }, [item.vocab])
+  const selectedReviewVocabs = useMemo(() => {
+    const vocabById = new Map(item.vocab.map((vocab) => [vocab.id, vocab]))
+
+    return selectedReviewVocabIds
+      .map((id) => vocabById.get(id))
+      .filter((vocab): vocab is MusicVocabItem => Boolean(vocab))
+  }, [item.vocab, selectedReviewVocabIds])
+  const reviewVocabs =
+    selectedReviewVocabs.length > 0 ? selectedReviewVocabs : defaultReviewVocabs
+  const hasUserSelectedReviewVocabs = selectedReviewVocabs.length > 0
+  // Keep the old below-player vocab panel parked while vocab lives on the video.
+  const showInlineVocabPanel = false
   const isRoomyVocabPanel =
     selectedLineVocabs.length > 0 && selectedLineVocabs.length <= 4
   const activeLineIndex = activeLine
@@ -336,6 +405,14 @@ export function MusicDetailClient({
   const canSeekPreviousLine = activeLineIndex > 0
   const canSeekNextLine =
     item.lyrics.length > 0 && activeLineIndex < item.lyrics.length - 1
+
+  const toggleReviewVocab = (vocabId: string) => {
+    setSelectedReviewVocabIds((current) =>
+      current.includes(vocabId)
+        ? current.filter((id) => id !== vocabId)
+        : [...current, vocabId],
+    )
+  }
 
   const seekRelativeLine = (direction: 'previous' | 'next') => {
     if (item.lyrics.length === 0) return
@@ -351,6 +428,14 @@ export function MusicDetailClient({
     if (nextLine) {
       seekToMs(nextLine.atMs)
     }
+  }
+
+  const playLyricLine = (lineAtMs: number) => {
+    seekToMs(lineAtMs)
+    play()
+    document
+      .getElementById('music-player-frame')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   useEffect(() => {
@@ -449,15 +534,15 @@ export function MusicDetailClient({
   return (
     <div className="min-w-0 overflow-x-hidden space-y-12">
       <div className="min-w-0 space-y-6 overflow-x-hidden">
-        <section className="glass-panel flex min-w-0 flex-col overflow-hidden rounded-[28px] border border-border p-4">
-          <div className="mb-5 flex items-end justify-between gap-4">
+        <section className="flex min-w-0 flex-col overflow-hidden">
+          <div className="mb-4 flex items-end gap-4">
             <div>
               <p className="text-sm text-muted">{item.artist}</p>
               <h1 className="font-heading text-3xl font-bold tracking-tight">
                 {item.title}
               </h1>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="hidden">
               {showQuizLink ? (
                 <span className="text-sm font-semibold text-muted">
                   學會了嗎？
@@ -473,10 +558,147 @@ export function MusicDetailClient({
               ) : null}
             </div>
           </div>
+          {item.lyricsSourceText || item.lyricsSourceUrl ? (
+            <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+              <span
+                className="h-8 w-1 rounded-full bg-brand"
+                aria-hidden="true"
+              />
+              <span className="font-semibold text-foreground">
+                {locale === 'en'
+                  ? 'Lyrics source'
+                  : locale === 'ja'
+                    ? '歌詞の出典'
+                    : '歌詞來源'}
+              </span>
+              {item.lyricsSourceText ? (
+                <span className="font-medium">{item.lyricsSourceText}</span>
+              ) : null}
+              {item.lyricsSourceUrl ? (
+                <a
+                  href={getExternalHref(item.lyricsSourceUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-bold text-brand-strong underline decoration-brand/40 underline-offset-4 transition hover:text-brand"
+                >
+                  {locale === 'en'
+                    ? 'Open source'
+                    : locale === 'ja'
+                      ? '出典を開く'
+                      : '查看來源'}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 17 17 7" />
+                    <path d="M9 7h8v8" />
+                  </svg>
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="mb-2 flex justify-end text-md font-semibold text-muted">
+            <span>
+              已加入 {selectedReviewVocabs.length} 個單詞到
+              <button
+                type="button"
+                onClick={() =>
+                  vocabReviewRef.current?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  })
+                }
+                className="ml-1 font-bold text-brand-strong underline decoration-brand/40 underline-offset-4 transition hover:text-brand"
+              >
+                回顧
+              </button>
+            </span>
+          </div>
           <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[26px] border border-border lg:max-w-[1280px]">
             <div id="music-player-frame" className="aspect-video w-full" />
+            {selectedLineVocabs.length > 0 ? (
+              <div className="pointer-events-none absolute left-2 top-[42%] z-20 flex max-h-[58%] max-w-[56%] -translate-y-1/2 flex-col gap-1.5 overflow-hidden px-1 py-1 sm:left-4 sm:top-[44%] sm:max-h-[60%] sm:max-w-[292px]">
+                {selectedLineVocabs.map((vocab) => {
+                  const overlayMeaning = getLocalizedText(vocab.meaning, 'zh')
+                  const isSelectedForReview = selectedReviewVocabIds.includes(
+                    vocab.id,
+                  )
+
+                  return (
+                    <button
+                      type="button"
+                      key={vocab.id}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        toggleReviewVocab(vocab.id)
+                      }}
+                      aria-label={`${isSelectedForReview ? 'Remove' : 'Add'} ${vocab.word} ${isSelectedForReview ? 'from' : 'to'} vocab review`}
+                      title="點一下加入單詞回顧"
+                      className={`pointer-events-auto relative w-full rounded-[12px] border border-white/15 border-l-2 border-l-brand py-1.5 pl-2.5 pr-7 text-left shadow-[0_6px_22px_rgba(0,0,0,0.14)] backdrop-blur-[2px] transition hover:-translate-y-0.5 hover:border-brand/70 hover:bg-neutral-900/38 focus:outline-none focus:ring-2 focus:ring-brand/70 ${
+                        isSelectedForReview
+                          ? 'bg-neutral-950/45 ring-1 ring-brand/60'
+                          : 'bg-neutral-900/20'
+                      }`}
+                    >
+                      <span className="absolute right-1.5 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand/90 text-white shadow-sm transition hover:bg-brand">
+                        {isSelectedForReview ? (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="m5 12 4 4L19 6" />
+                          </svg>
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M12 5v14" />
+                            <path d="M5 12h14" />
+                          </svg>
+                        )}
+                      </span>
+                      {false ? (
+                        <span>{isSelectedForReview ? '已加入' : '點選'}</span>
+                      ) : null}
+                      {vocab.furigana ? (
+                        <p className="break-words text-[10px] font-semibold leading-tight text-white/82 sm:text-[11px]">
+                          {vocab.furigana}
+                        </p>
+                      ) : null}
+                      <p className="break-words font-heading text-sm font-bold leading-tight text-white sm:text-base">
+                        {vocab.word}
+                      </p>
+                      {overlayMeaning ? (
+                        <p className="mt-0.5 break-words text-[11px] font-bold leading-snug text-brand sm:text-xs">
+                          {overlayMeaning}
+                        </p>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
             {activeLine ? (
-              <div className="pointer-events-none absolute inset-x-3 bottom-[18%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[16%]">
+              <div className="pointer-events-none absolute inset-x-3 bottom-[22%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[20%]">
                 <div className="max-w-[92%] text-center">
                   <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
                     {activeLine.japanese}
@@ -561,147 +783,152 @@ export function MusicDetailClient({
               </svg>
             </button>
           </div>
-          <div className="mt-4 min-w-0 overflow-hidden rounded-[18px] border border-border bg-brand-soft/60 p-2.5 lg:mt-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="font-heading text-base font-bold">
-                {dict.sections.vocab}
-              </h2>
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <span>{selectedLine?.timeLabel}</span>
-              </div>
-            </div>
-            {selectedLineVocabs.length > 0 ? (
-              <div className="group/vocab-scroll relative">
-                {vocabScrollState.canScrollLeft ? (
-                  <button
-                    type="button"
-                    onClick={() => scrollVocabCards('left')}
-                    aria-label="Scroll vocab cards left"
-                    className="absolute left-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
-                  >
-                    ‹
-                  </button>
-                ) : null}
-                <div
-                  ref={vocabScrollRef}
-                  onScroll={syncVocabScrollState}
-                  className={`flex h-[136px] min-w-0 items-stretch gap-2 overflow-x-scroll overflow-y-hidden pb-3 [scrollbar-color:rgba(100,116,139,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-500/45 [&::-webkit-scrollbar-track]:bg-transparent sm:h-[132px] lg:h-[148px] ${
-                    selectedLineVocabs.length === 1
-                      ? 'justify-start sm:justify-center'
-                      : 'justify-start'
-                  }`}
-                >
-                  {selectedLineVocabs.map((vocab) => {
-                    const meaning = getLocalizedText(vocab.meaning, locale)
-                    const exampleTranslation = getLocalizedText(
-                      vocab.exampleTranslation,
-                      locale,
-                    )
-                    const density = getVocabCardDensity({
-                      word: vocab.word,
-                      furigana: vocab.furigana,
-                      meaning,
-                      example: vocab.example,
-                      exampleTranslation,
-                    })
-                    const cardPadding = density === 'tiny' ? 'p-1.5' : 'p-2'
-                    const wordClass = isRoomyVocabPanel
-                      ? density === 'tiny'
-                        ? 'text-xs leading-tight'
-                        : density === 'compact'
-                          ? 'text-sm leading-tight'
-                          : 'text-base leading-tight'
-                      : density === 'tiny'
-                        ? 'text-[11px] leading-tight'
-                        : density === 'compact'
-                          ? 'text-xs leading-tight'
-                          : 'text-[15px] leading-tight'
-                    const furiganaClass = isRoomyVocabPanel
-                      ? density === 'tiny'
-                        ? 'text-[10px]'
-                        : 'text-xs'
-                      : density === 'tiny'
-                        ? 'text-[10px]'
-                        : density === 'compact'
-                          ? 'text-[11px]'
-                          : 'text-xs'
-                    const bodyClass = isRoomyVocabPanel
-                      ? density === 'tiny'
-                        ? 'text-[10px] leading-[1.08]'
-                        : density === 'compact'
-                          ? 'text-xs leading-tight'
-                          : 'text-sm leading-snug'
-                      : density === 'tiny'
-                        ? 'text-[9px] leading-[1.05]'
-                        : density === 'compact'
-                          ? 'text-[11px] leading-tight'
-                          : 'text-[13px] leading-snug'
-                    const bodyGap = density === 'normal' ? 'gap-0.5' : 'gap-px'
-                    const cardWidth = isRoomyVocabPanel
-                      ? selectedLineVocabs.length === 1
-                        ? 'w-full max-w-[520px]'
-                        : 'w-[min(78vw,420px)]'
-                      : 'w-[220px] sm:w-[250px] lg:w-[270px]'
-
-                    return (
-                      <article
-                        key={vocab.id}
-                        className={`flex h-full ${cardWidth} max-sm:min-w-[220px] shrink-0 flex-col overflow-hidden rounded-[12px] bg-surface-strong ${cardPadding}`}
-                      >
-                        <div className="flex min-w-0 items-start justify-between gap-2">
-                          <h3
-                            className={`min-w-0 break-words font-heading font-bold ${wordClass}`}
-                          >
-                            {vocab.word}
-                          </h3>
-                          <span
-                            className={`shrink-0 pt-0.5 text-muted ${furiganaClass}`}
-                          >
-                            {vocab.furigana}
-                          </span>
-                        </div>
-                        <div
-                          className={`mt-1 flex min-h-0 flex-1 flex-col justify-evenly ${bodyGap}`}
-                        >
-                          <p
-                            className={`break-words font-semibold text-brand-strong ${bodyClass}`}
-                          >
-                            {meaning}
-                          </p>
-                          <p className={`break-words text-muted ${bodyClass}`}>
-                            {vocab.example}
-                          </p>
-                          {exampleTranslation ? (
-                            <p
-                              className={`break-words text-muted/80 ${bodyClass}`}
-                            >
-                              {exampleTranslation}
-                            </p>
-                          ) : null}
-                        </div>
-                      </article>
-                    )
-                  })}
+          {showInlineVocabPanel ? (
+            <div className="mt-4 min-w-0 overflow-hidden rounded-[18px] border border-border bg-brand-soft/60 p-2.5 lg:mt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="font-heading text-base font-bold">
+                  {dict.sections.vocab}
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <span>{selectedLine?.timeLabel}</span>
                 </div>
-                {vocabScrollState.canScrollRight ? (
-                  <button
-                    type="button"
-                    onClick={() => scrollVocabCards('right')}
-                    aria-label="Scroll vocab cards right"
-                    className="absolute right-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
+              </div>
+              {selectedLineVocabs.length > 0 ? (
+                <div className="group/vocab-scroll relative">
+                  {vocabScrollState.canScrollLeft ? (
+                    <button
+                      type="button"
+                      onClick={() => scrollVocabCards('left')}
+                      aria-label="Scroll vocab cards left"
+                      className="absolute left-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
+                    >
+                      ‹
+                    </button>
+                  ) : null}
+                  <div
+                    ref={vocabScrollRef}
+                    onScroll={syncVocabScrollState}
+                    className={`flex h-[136px] min-w-0 items-stretch gap-2 overflow-x-scroll overflow-y-hidden pb-3 [scrollbar-color:rgba(100,116,139,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-500/45 [&::-webkit-scrollbar-track]:bg-transparent sm:h-[132px] lg:h-[148px] ${
+                      selectedLineVocabs.length === 1
+                        ? 'justify-start sm:justify-center'
+                        : 'justify-start'
+                    }`}
                   >
-                    ›
-                  </button>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex h-[136px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[132px] lg:h-[148px]">
-                {selectedLine
-                  ? vocabPanelCopy[locale].noVocab
-                  : vocabPanelCopy[locale].notStarted}
-              </div>
-            )}
-          </div>
+                    {selectedLineVocabs.map((vocab) => {
+                      const meaning = getLocalizedText(vocab.meaning, locale)
+                      const exampleTranslation = getLocalizedText(
+                        vocab.exampleTranslation,
+                        locale,
+                      )
+                      const density = getVocabCardDensity({
+                        word: vocab.word,
+                        furigana: vocab.furigana,
+                        meaning,
+                        example: vocab.example,
+                        exampleTranslation,
+                      })
+                      const cardPadding = density === 'tiny' ? 'p-1.5' : 'p-2'
+                      const wordClass = isRoomyVocabPanel
+                        ? density === 'tiny'
+                          ? 'text-xs leading-tight'
+                          : density === 'compact'
+                            ? 'text-sm leading-tight'
+                            : 'text-base leading-tight'
+                        : density === 'tiny'
+                          ? 'text-[11px] leading-tight'
+                          : density === 'compact'
+                            ? 'text-xs leading-tight'
+                            : 'text-[15px] leading-tight'
+                      const furiganaClass = isRoomyVocabPanel
+                        ? density === 'tiny'
+                          ? 'text-[10px]'
+                          : 'text-xs'
+                        : density === 'tiny'
+                          ? 'text-[10px]'
+                          : density === 'compact'
+                            ? 'text-[11px]'
+                            : 'text-xs'
+                      const bodyClass = isRoomyVocabPanel
+                        ? density === 'tiny'
+                          ? 'text-[10px] leading-[1.08]'
+                          : density === 'compact'
+                            ? 'text-xs leading-tight'
+                            : 'text-sm leading-snug'
+                        : density === 'tiny'
+                          ? 'text-[9px] leading-[1.05]'
+                          : density === 'compact'
+                            ? 'text-[11px] leading-tight'
+                            : 'text-[13px] leading-snug'
+                      const bodyGap =
+                        density === 'normal' ? 'gap-0.5' : 'gap-px'
+                      const cardWidth = isRoomyVocabPanel
+                        ? selectedLineVocabs.length === 1
+                          ? 'w-full max-w-[520px]'
+                          : 'w-[min(78vw,420px)]'
+                        : 'w-[220px] sm:w-[250px] lg:w-[270px]'
+
+                      return (
+                        <article
+                          key={vocab.id}
+                          className={`flex h-full ${cardWidth} max-sm:min-w-[220px] shrink-0 flex-col overflow-hidden rounded-[12px] bg-surface-strong ${cardPadding}`}
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <h3
+                              className={`min-w-0 break-words font-heading font-bold ${wordClass}`}
+                            >
+                              {vocab.word}
+                            </h3>
+                            <span
+                              className={`shrink-0 pt-0.5 text-muted ${furiganaClass}`}
+                            >
+                              {vocab.furigana}
+                            </span>
+                          </div>
+                          <div
+                            className={`mt-1 flex min-h-0 flex-1 flex-col justify-evenly ${bodyGap}`}
+                          >
+                            <p
+                              className={`break-words font-semibold text-brand-strong ${bodyClass}`}
+                            >
+                              {meaning}
+                            </p>
+                            <p
+                              className={`break-words text-muted ${bodyClass}`}
+                            >
+                              {vocab.example}
+                            </p>
+                            {exampleTranslation ? (
+                              <p
+                                className={`break-words text-muted/80 ${bodyClass}`}
+                              >
+                                {exampleTranslation}
+                              </p>
+                            ) : null}
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                  {vocabScrollState.canScrollRight ? (
+                    <button
+                      type="button"
+                      onClick={() => scrollVocabCards('right')}
+                      aria-label="Scroll vocab cards right"
+                      className="absolute right-1 top-1/2 z-10 flex h-8 w-5 -translate-y-1/2 items-center justify-center bg-transparent text-2xl font-bold leading-none text-brand-strong opacity-80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition hover:scale-110 hover:opacity-100 focus:scale-110 focus:opacity-100"
+                    >
+                      ›
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex h-[136px] items-center justify-center rounded-[14px] border border-dashed border-border bg-surface-strong/80 px-4 text-center text-sm font-semibold text-muted sm:h-[132px] lg:h-[148px]">
+                  {selectedLine
+                    ? vocabPanelCopy[locale].noVocab
+                    : vocabPanelCopy[locale].notStarted}
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="glass-panel min-w-0 overflow-hidden rounded-[28px] border border-border p-4">
@@ -740,15 +967,25 @@ export function MusicDetailClient({
                       seekToMs(line.atMs)
                     }
                   }}
-                  className={`min-w-0 max-w-full cursor-pointer select-text rounded-[18px] border p-3 text-left transition ${
+                  className={`group min-w-0 max-w-full cursor-pointer select-text rounded-[18px] border p-3 text-left transition ${
                     isActive
                       ? 'border-brand bg-brand-soft shadow-sm'
                       : 'border-border bg-surface hover:border-brand'
                   }`}
                 >
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-brand-strong">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-brand-strong">
                       {line.timeLabel}
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-brand/40 text-brand-strong opacity-70 transition group-hover:translate-x-0.5 group-hover:opacity-100">
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-2.5 w-2.5"
+                          fill="currentColor"
+                        >
+                          <path d="m8 5 11 7-11 7z" />
+                        </svg>
+                      </span>
                     </span>
                     <span className="text-muted">
                       {
@@ -769,8 +1006,104 @@ export function MusicDetailClient({
             })}
           </div>
         </section>
-      </div>
 
+        {reviewVocabs.length > 0 || showQuizLink ? (
+          <section
+            ref={vocabReviewRef}
+            className="min-w-0 scroll-mt-6 space-y-4 overflow-hidden border-t border-border pt-8"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-strong">
+                  Vocab Review
+                </p>
+                <h2 className="mt-1 font-heading text-2xl font-bold tracking-tight">
+                  單詞回顧
+                </h2>
+              </div>
+              {showQuizLink ? (
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <span className="text-sm font-semibold text-muted">
+                    學會了嗎？
+                  </span>
+                  <Link
+                    href={`/${locale}/music/quiz/${item.id}`}
+                    className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-strong hover:shadow-md dark:text-white"
+                  >
+                    <button className="text-white">{dict.sections.quiz}</button>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-xs font-medium text-muted">
+              {hasUserSelectedReviewVocabs
+                ? '你選擇的單詞'
+                : '未點選單詞，系統推薦'}
+            </p>
+            {reviewVocabs.length > 0 ? (
+              <div className="flex min-w-0 gap-3 overflow-x-auto pb-3">
+                {reviewVocabs.map((vocab) => {
+                  const sourceLyric = lyricById.get(vocab.lineId)
+                  const meaning = getLocalizedText(vocab.meaning, 'zh')
+                  const lyricTranslation = sourceLyric
+                    ? getLocalizedText(sourceLyric.translation, locale)
+                    : ''
+
+                  return (
+                    <article
+                      key={vocab.id}
+                      className="flex w-[260px] shrink-0 flex-col rounded-[14px] border border-border bg-surface p-4 shadow-sm sm:w-[300px]"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-muted">
+                          {vocab.furigana}
+                        </p>
+                        <h3 className="mt-1 break-words font-heading text-2xl font-bold leading-tight">
+                          {vocab.word}
+                        </h3>
+                      </div>
+                      {meaning ? (
+                        <p className="mt-3 break-words text-base font-bold leading-snug text-brand-strong">
+                          {meaning}
+                        </p>
+                      ) : null}
+                      {sourceLyric ? (
+                        <button
+                          type="button"
+                          onClick={() => playLyricLine(sourceLyric.atMs)}
+                          className="group mt-4 w-full space-y-2 border-t border-border pt-3 text-left transition hover:border-brand hover:text-brand-strong focus:outline-none focus:ring-2 focus:ring-brand/70"
+                        >
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-strong">
+                            {sourceLyric.timeLabel}
+                            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-brand/40 text-brand-strong opacity-70 transition group-hover:translate-x-0.5 group-hover:opacity-100">
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="h-2.5 w-2.5"
+                                fill="currentColor"
+                              >
+                                <path d="m8 5 11 7-11 7z" />
+                              </svg>
+                            </span>
+                          </span>
+                          <p className="break-words text-sm font-semibold leading-relaxed text-foreground">
+                            {sourceLyric.japanese}
+                          </p>
+                          {lyricTranslation ? (
+                            <p className="break-words text-sm leading-relaxed text-muted">
+                              {lyricTranslation}
+                            </p>
+                          ) : null}
+                        </button>
+                      ) : null}
+                    </article>
+                  )
+                })}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
       {sameArtistMusic.length > 0 ? (
         <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
           <div>
