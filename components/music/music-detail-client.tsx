@@ -704,7 +704,7 @@ export function MusicDetailClient({
                     {activeLine.japanese}
                   </p>
                   {getLocalizedText(activeLine.translation, locale) ? (
-                    <p className="mt-1 text-xs leading-snug text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-sm">
+                    <p className="mt-1 text-base leading-snug text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
                       {getLocalizedText(activeLine.translation, locale)}
                     </p>
                   ) : null}
