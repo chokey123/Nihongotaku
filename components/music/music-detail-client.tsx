@@ -680,15 +680,15 @@ export function MusicDetailClient({
                         <span>{isSelectedForReview ? '已加入' : '點選'}</span>
                       ) : null}
                       {vocab.furigana ? (
-                        <p className="break-words text-[10px] font-semibold leading-tight text-white/82 sm:text-[11px]">
+                        <p className="break-words text-[10px] font-semibold leading-tight text-white/82 [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-[11px]">
                           {vocab.furigana}
                         </p>
                       ) : null}
-                      <p className="break-words font-heading text-sm font-bold leading-tight text-white sm:text-base">
+                      <p className="break-words font-heading text-sm font-bold leading-tight text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.72)] sm:text-base">
                         {vocab.word}
                       </p>
                       {overlayMeaning ? (
-                        <p className="mt-0.5 break-words text-[11px] font-bold leading-snug text-brand sm:text-xs">
+                        <p className="mt-0.5 break-words text-[11px] font-bold leading-snug text-brand [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] sm:text-xs">
                           {overlayMeaning}
                         </p>
                       ) : null}
