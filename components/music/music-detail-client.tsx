@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
@@ -297,6 +297,26 @@ const sameArtistCopy = {
   },
 } as const
 
+const recommendedCopy = {
+  zh: {
+    eyebrow: '推薦觀看',
+    title: '查看更多日語歌曲',
+    description: '優先推薦同曲風，沒有的話就從最新發布裡挑給你。',
+  },
+  en: {
+    eyebrow: 'Recommended',
+    title: 'Try these next',
+    description:
+      'Genre matches come first, then the latest published songs fill the list.',
+  },
+  ja: {
+    eyebrow: 'おすすめ',
+    title: '次に聴くならこちら',
+    description:
+      'まず同じジャンルから選び、足りない分は最新公開曲からおすすめします。',
+  },
+} as const
+
 const vocabPanelCopy = {
   zh: {
     notStarted: '歌曲還沒開始，單詞卡會跟著歌詞顯示。',
@@ -314,18 +334,89 @@ const vocabPanelCopy = {
   },
 } as const
 
+const MUSIC_RAIL_BATCH_SIZE = 6
+
+function MusicRail({
+  eyebrow,
+  title,
+  description,
+  items,
+  locale,
+}: {
+  eyebrow: string
+  title: string
+  description?: string
+  items: MusicItem[]
+  locale: Locale
+}) {
+  const [visibleCount, setVisibleCount] = useState(MUSIC_RAIL_BATCH_SIZE)
+
+  const visibleItems = useMemo(
+    () => items.slice(0, visibleCount),
+    [items, visibleCount],
+  )
+
+  const handleScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      const container = event.currentTarget
+      const remaining =
+        container.scrollWidth - container.clientWidth - container.scrollLeft
+
+      if (remaining > 80 || visibleCount >= items.length) {
+        return
+      }
+
+      setVisibleCount((current) =>
+        Math.min(current + MUSIC_RAIL_BATCH_SIZE, items.length),
+      )
+    },
+    [items.length, visibleCount],
+  )
+
+  return (
+    <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-strong">
+          {eyebrow}
+        </p>
+        <h2 className="mt-2 font-heading text-2xl font-bold tracking-tight">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-2 text-sm text-muted">{description}</p>
+        ) : null}
+      </div>
+      <div
+        className="flex min-w-0 gap-5 overflow-x-auto pb-3"
+        onScroll={handleScroll}
+      >
+        {visibleItems.map((music) => (
+          <div
+            key={music.id}
+            className="h-[316px] w-[280px] shrink-0 sm:h-[316px] sm:w-[320px] lg:h-[316px] lg:w-[340px]"
+          >
+            <MusicCard item={music} locale={locale} fixedSplit />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function MusicDetailClient({
   item,
   dict,
   locale,
   showQuizLink = true,
   sameArtistMusic = [],
+  recommendedMusic = [],
 }: {
   item: MusicItem
   dict: Dictionary
   locale: Locale
   showQuizLink?: boolean
   sameArtistMusic?: MusicItem[]
+  recommendedMusic?: MusicItem[]
 }) {
   const {
     currentMs,
@@ -1105,29 +1196,21 @@ export function MusicDetailClient({
         ) : null}
       </div>
       {sameArtistMusic.length > 0 ? (
-        <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-strong">
-              {sameArtistCopy[locale].eyebrow}
-            </p>
-            <h2 className="mt-2 font-heading text-2xl font-bold tracking-tight">
-              {sameArtistCopy[locale].title(item.artist)}
-            </h2>
-            <p className="mt-2 text-sm text-muted">
-              {sameArtistCopy[locale].description}
-            </p>
-          </div>
-          <div className="flex min-w-0 gap-5 overflow-x-auto pb-3">
-            {sameArtistMusic.map((music) => (
-              <div
-                key={music.id}
-                className="w-[280px] shrink-0 sm:w-[320px] lg:w-[340px]"
-              >
-                <MusicCard item={music} locale={locale} />
-              </div>
-            ))}
-          </div>
-        </section>
+        <MusicRail
+          eyebrow={sameArtistCopy[locale].eyebrow}
+          title={sameArtistCopy[locale].title(item.artist)}
+          description={sameArtistCopy[locale].description}
+          items={sameArtistMusic}
+          locale={locale}
+        />
+      ) : null}
+      {recommendedMusic.length > 0 ? (
+        <MusicRail
+          eyebrow={recommendedCopy[locale].eyebrow}
+          title={recommendedCopy[locale].title}
+          items={recommendedMusic}
+          locale={locale}
+        />
       ) : null}
     </div>
   )

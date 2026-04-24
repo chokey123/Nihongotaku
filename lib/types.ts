@@ -25,8 +25,8 @@ export interface AIMusicVocabSuggestion {
   furigana: string;
   difficulty: VocabDifficulty;
   meaningZh: string;
-  example: string;
-  exampleTranslationZh: string;
+  example?: string;
+  exampleTranslationZh?: string;
 }
 
 export interface AIMusicVocabQuota {

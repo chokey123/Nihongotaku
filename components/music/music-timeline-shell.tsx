@@ -628,7 +628,7 @@ function MusicTimelineLoaded({
                 type="button"
                 onClick={saveTimelineAndReturn}
                 disabled={isPending}
-                className="rounded-full border border-border bg-white px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70 dark:bg-white"
+                className="rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:border-brand disabled:opacity-70"
               >
                 {isPending ? '...' : copy.save}
               </button>

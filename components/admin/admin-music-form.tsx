@@ -1007,12 +1007,13 @@ export function AdminMusicForm({
                 ...existing.meaning,
                 zh: existing.meaning.zh || suggestion.meaningZh,
               },
-              example: existing.example || suggestion.example,
+              example: existing.example || suggestion.example || '',
               exampleTranslation: {
                 ...existing.exampleTranslation,
                 zh:
                   existing.exampleTranslation.zh ||
-                  suggestion.exampleTranslationZh,
+                  suggestion.exampleTranslationZh ||
+                  '',
               },
             }
             continue
@@ -1028,10 +1029,10 @@ export function AdminMusicForm({
               ...emptyLocalizedText(),
               zh: suggestion.meaningZh,
             },
-            example: suggestion.example,
+            example: suggestion.example || '',
             exampleTranslation: {
               ...emptyLocalizedText(),
-              zh: suggestion.exampleTranslationZh,
+              zh: suggestion.exampleTranslationZh || '',
             },
           })
         }

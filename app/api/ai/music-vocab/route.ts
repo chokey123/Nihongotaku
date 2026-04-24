@@ -27,18 +27,8 @@ const responseJsonSchema = {
             enum: ['beginner', 'intermediate', 'hard'],
           },
           meaningZh: { type: 'string' },
-          example: { type: 'string' },
-          exampleTranslationZh: { type: 'string' },
         },
-        required: [
-          'lineId',
-          'word',
-          'furigana',
-          'difficulty',
-          'meaningZh',
-          'example',
-          'exampleTranslationZh',
-        ],
+        required: ['lineId', 'word', 'furigana', 'difficulty', 'meaningZh'],
       },
     },
   },
@@ -75,18 +65,14 @@ function buildPrompt(lyrics: Array<{ lineId: string; japanese: string }>) {
     requirements: [
       'For each lyric line, always find 1 to 3 vocab that is worth learning.',
       'Return vocab grouped by the original lineId.',
-      'For verb, transform to original surface form if appropriate',
-      'For any vocab do not simply copy from original lyics.',
-      'If appropriate, also pick grammar and fit in the higrana as furigana, example and exampleTranslationZh.',
+      'For verb, transform to original surface form',
+      'If appropriate, also pick grammar and fit in the higrana as furigana.',
       'For example of grammar, In case of 教えてほしい, 教える should be the verb, ～てほしい should be the grammar to introduce.',
-      'furigana must be accurate and readable in hiragana.',
       'difficulty must be exactly one of: beginner, intermediate, hard.',
-      'example must be a natural Japanese sentence that is good for learning.',
-      'exampleTranslationZh must be exact translation of example in natural Traditional Chinese.',
       'meaningZh must be concise Traditional Chinese.',
       'Only return items for lines that have meaningful Japanese text.',
       'Do not include duplicate vocab in exact same line of lyrics.',
-      'If there is multiple line with same lyrics can have same vocab output.',
+      'If there is multiple line with same lyrics should have same vocab output.',
       'Do not hesitate to generate as many vocab & grammar to learn as possible.',
       'Return valid JSON only.',
     ],
@@ -97,6 +83,8 @@ function buildPrompt(lyrics: Array<{ lineId: string; japanese: string }>) {
 function normalizeSuggestion(
   suggestion: AIMusicVocabSuggestion,
 ): AIMusicVocabSuggestion | null {
+  const example = suggestion.example?.trim() ?? ''
+  const exampleTranslationZh = suggestion.exampleTranslationZh?.trim() ?? ''
   const normalized = {
     lineId: suggestion.lineId?.trim() ?? '',
     word: suggestion.word?.trim() ?? '',
@@ -108,8 +96,8 @@ function normalizeSuggestion(
         ? suggestion.difficulty
         : 'intermediate',
     meaningZh: suggestion.meaningZh?.trim() ?? '',
-    example: suggestion.example?.trim() ?? '',
-    exampleTranslationZh: suggestion.exampleTranslationZh?.trim() ?? '',
+    ...(example ? { example } : {}),
+    ...(exampleTranslationZh ? { exampleTranslationZh } : {}),
   }
 
   if (

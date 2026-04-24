@@ -19,12 +19,14 @@ export function MusicCard({
   href,
   metaBadge,
   disableLink = false,
+  fixedSplit = false,
 }: {
   item: MusicItem
   locale: string
   href?: string
   metaBadge?: string
   disableLink?: boolean
+  fixedSplit?: boolean
 }) {
   const router = useRouter()
   const thumbnailUrl = useYoutubeThumbnail(item.youtubeId)
@@ -44,7 +46,9 @@ export function MusicCard({
 
   const content = (
     <>
-      <div className="relative h-48 overflow-hidden">
+      <div
+        className={`relative overflow-hidden ${fixedSplit ? 'h-2/3' : 'h-48'}`}
+      >
         {thumbnailUrl ? (
           <>
             <Image
@@ -68,10 +72,14 @@ export function MusicCard({
           </>
         )}
       </div>
-      <div className="space-y-2 p-4">
+      <div
+        className={`flex flex-col justify-between space-y-2 p-4 ${
+          fixedSplit ? 'h-1/2' : ''
+        }`}
+      >
         <p className="text-sm font-medium text-muted">{item.artist}</p>
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-heading text-xl font-bold tracking-tight">
+          <h3 className="line-clamp-2 font-heading text-xl font-bold tracking-tight">
             {item.title}
           </h3>
           <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
@@ -103,7 +111,11 @@ export function MusicCard({
 
   if (disableLink) {
     return (
-      <article className="glass-panel flex flex-col overflow-hidden rounded-[28px] border border-border">
+      <article
+        className={`glass-panel flex flex-col overflow-hidden rounded-[28px] border border-border ${
+          fixedSplit ? 'h-full' : ''
+        }`}
+      >
         {content}
       </article>
     )
@@ -124,7 +136,9 @@ export function MusicCard({
           router.push(detailHref)
         }
       }}
-      className="glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand"
+      className={`glass-panel group flex flex-col overflow-hidden rounded-[28px] border border-border transition hover:-translate-y-1 hover:border-brand ${
+        fixedSplit ? 'h-full' : ''
+      }`}
     >
       {content}
     </article>
