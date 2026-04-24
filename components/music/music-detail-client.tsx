@@ -790,7 +790,7 @@ export function MusicDetailClient({
             ) : null}
             {activeLine ? (
               <div className="pointer-events-none absolute inset-x-3 bottom-[22%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[20%]">
-                <div className="max-w-[92%] text-center">
+                <div className="max-w-[92%] rounded-[14px] border border-white/10 border-l-2 border-l-brand bg-black/28 px-4 py-2.5 text-center backdrop-blur-[2px]">
                   <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
                     {activeLine.japanese}
                   </p>

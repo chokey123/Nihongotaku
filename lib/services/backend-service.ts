@@ -1411,7 +1411,7 @@ export class BackendService {
       return true
     })
 
-    return uniqueSelectedVocabs.map(({ key, vocab }, index) => {
+    return uniqueSelectedVocabs.map(({ key, vocab, lineJapanese }, index) => {
       const correctMeaning = getLocalizedMeaning(vocab.meaning, locale)
       const wrongOptions = allVocabs
         .filter(
@@ -1448,6 +1448,7 @@ export class BackendService {
         options: options.sort((left, right) =>
           `${key}-${left}`.localeCompare(`${key}-${right}`),
         ),
+        lyricHint: lineJapanese,
       }
     })
   }

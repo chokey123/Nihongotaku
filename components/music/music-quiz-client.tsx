@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 
 import { useAuth } from '@/components/providers/auth-provider'
@@ -14,6 +15,20 @@ import type {
 
 const QUESTIONS_PER_PAGE = 5
 const difficultyOrder: VocabDifficulty[] = ['beginner', 'intermediate', 'hard']
+const lyricHintToggleCopy = {
+  zh: {
+    show: '顯示歌詞提示',
+    hide: '收起歌詞提示',
+  },
+  en: {
+    show: 'Show lyric hint',
+    hide: 'Hide lyric hint',
+  },
+  ja: {
+    show: '歌詞ヒントを表示',
+    hide: '歌詞ヒントを閉じる',
+  },
+} as const
 
 const quizCopy = {
   ja: {
@@ -58,6 +73,9 @@ const quizCopy = {
     lastAttempt: 'Last attempt',
     previousPage: 'Previous',
     nextPage: 'Next',
+    backToMusic: '聼音樂~',
+    showLyricHint: 'Show lyric hint',
+    hideLyricHint: 'Hide lyric hint',
     beginner: 'Beginner',
     intermediate: 'Intermediate',
     hard: 'Hard',
@@ -113,6 +131,7 @@ export function MusicQuizClient({
 }) {
   const { user, isLoading: isAuthLoading } = useAuth()
   const copy = quizCopy[locale]
+  const lyricHintCopy = lyricHintToggleCopy[locale]
   const [selectedOptions, setSelectedOptions] = useState<
     Record<string, string>
   >({})
@@ -136,6 +155,9 @@ export function MusicQuizClient({
     hard: 0,
   })
   const [pageInput, setPageInput] = useState('1')
+  const [expandedLyricHints, setExpandedLyricHints] = useState<
+    Record<string, boolean>
+  >({})
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -227,6 +249,10 @@ export function MusicQuizClient({
     setPageInput(String(currentPage + 1))
   }, [currentPage])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [currentPage, selectedDifficulty])
+
   const score = useMemo(
     () =>
       visibleQuestions.reduce((total, question) => {
@@ -255,6 +281,8 @@ export function MusicQuizClient({
     currentPage * QUESTIONS_PER_PAGE + QUESTIONS_PER_PAGE,
   )
   const answerLocale = locale === 'ja' ? 'ZH' : locale.toUpperCase()
+  const backToMusicLabel =
+    'backToMusic' in copy ? copy.backToMusic : '回去聼音樂~'
 
   const updateCurrentPage = (nextPage: number) => {
     setPageByDifficulty((current) => ({
@@ -264,18 +292,41 @@ export function MusicQuizClient({
   }
 
   return (
-    <div className="space-y-6 pb-28">
-      <section className="glass-panel rounded-[32px] border border-border p-6">
-        <p className="text-sm text-muted">{item.artist}</p>
-        <h1 className="mt-2 font-heading text-3xl font-bold">
-          {item.title} {copy.titleSuffix}
-        </h1>
-        <p className="mt-3 text-sm text-muted">
+    <div className="space-y-5 pb-24">
+      <section className="glass-panel rounded-[28px] border border-border p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted">{item.artist}</p>
+            <h1 className="mt-1.5 font-heading text-2xl font-bold">
+              {item.title} {copy.titleSuffix}
+            </h1>
+          </div>
+          <Link
+            href={`/${locale}/music/${item.id}`}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-foreground transition hover:border-brand hover:text-brand-strong"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+            {backToMusicLabel}
+          </Link>
+        </div>
+        <p className="mt-2.5 text-xs text-muted">
           {copy.pickMeaning} {answerLocale}。{copy.score}: {score} /{' '}
           {visibleQuestions.length}
         </p>
         {user ? (
-          <p className="mt-3 text-sm text-muted">
+          <p className="mt-2.5 text-xs text-muted">
             {isHistoryLoading
               ? copy.historyLoading
               : latestAttempt
@@ -283,13 +334,13 @@ export function MusicQuizClient({
                 : copy.historyEmpty}
           </p>
         ) : (
-          <p className="mt-3 text-sm text-muted">{copy.signInHint}</p>
+          <p className="mt-2.5 text-xs text-muted">{copy.signInHint}</p>
         )}
         {historyError ? (
-          <p className="mt-2 text-sm text-red-500">{historyError}</p>
+          <p className="mt-2 text-xs text-red-500">{historyError}</p>
         ) : null}
         {questions.length > 0 ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => {
@@ -304,7 +355,7 @@ export function MusicQuizClient({
                   hard: 0,
                 })
               }}
-              className="rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:border-brand"
+              className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium transition hover:border-brand"
             >
               {copy.retry}
             </button>
@@ -314,13 +365,13 @@ export function MusicQuizClient({
           </div>
         ) : null}
         {questions.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {difficultyOrder.map((difficulty) => (
               <button
                 key={difficulty}
                 type="button"
                 onClick={() => setSelectedDifficulty(difficulty)}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
                   selectedDifficulty === difficulty
                     ? 'border-brand bg-brand-soft text-brand-strong'
                     : 'border-border text-muted hover:border-brand hover:text-brand-strong'
@@ -335,7 +386,7 @@ export function MusicQuizClient({
 
       {visibleQuestions.length > 0 ? (
         <>
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {pageQuestions.map((question, pageIndex) => {
               const questionIndex = questions.findIndex(
                 (entry) => entry.key === question.key,
@@ -344,6 +395,9 @@ export function MusicQuizClient({
               const selectedOption = selectedOptions[question.key]
               const isCorrect = selectedOption === question.correctMeaning
               const isLocked = Boolean(selectedOption)
+              const isLyricHintExpanded = Boolean(
+                expandedLyricHints[question.key],
+              )
               const isSavingThisQuestion =
                 pendingQuestionKey === question.key &&
                 (saveState === 'saving' || isPending)
@@ -351,21 +405,61 @@ export function MusicQuizClient({
               return (
                 <section
                   key={question.key}
-                  className="glass-panel rounded-[28px] border border-border p-5"
+                  className="glass-panel rounded-[24px] border border-border p-4"
                 >
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
+                    <span className="rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-semibold text-brand-strong">
                       Q{displayIndex + 1}
                     </span>
                     <div>
-                      <h2 className="font-heading text-2xl font-bold">
+                      <h2 className="font-heading text-xl font-bold">
                         {question.word}
                       </h2>
-                      <p className="text-sm text-muted">{question.furigana}</p>
+                      <p className="text-xs text-muted">{question.furigana}</p>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {question.lyricHint ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedLyricHints((current) => ({
+                            ...current,
+                            [question.key]: !current[question.key],
+                          }))
+                        }
+                        className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
+                      >
+                        <span>
+                          {isLyricHintExpanded
+                            ? lyricHintCopy.hide
+                            : lyricHintCopy.show}
+                        </span>
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className={`h-3 w-3 transition ${
+                            isLyricHintExpanded ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      {isLyricHintExpanded ? (
+                        <div className="mt-2.5 border-l-2 border-l-brand pl-3 text-xs font-semibold leading-relaxed text-foreground">
+                          {question.lyricHint}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 grid gap-2.5 md:grid-cols-3">
                     {question.options.map((option) => {
                       const isSelected = selectedOption === option
                       const revealCorrect =
@@ -419,7 +513,7 @@ export function MusicQuizClient({
                             })
                           }}
                           disabled={isLocked}
-                          className={`rounded-[22px] border p-4 text-left transition ${
+                          className={`rounded-[18px] border p-3 text-left transition ${
                             revealCorrect
                               ? 'border-emerald-200 bg-emerald-50/95 text-slate-900 dark:border-emerald-700 dark:bg-emerald-900/45 dark:text-emerald-100'
                               : revealWrong
@@ -429,14 +523,14 @@ export function MusicQuizClient({
                                   : 'border-border bg-surface-strong text-foreground hover:border-brand hover:bg-surface'
                           } ${isLocked ? 'cursor-default' : ''}`}
                         >
-                          <span className="text-sm font-medium">{option}</span>
+                          <span className="text-xs font-medium">{option}</span>
                         </button>
                       )
                     })}
                   </div>
 
                   {selectedOption ? (
-                    <p className="mt-4 text-sm font-medium">
+                    <p className="mt-3 text-xs font-medium">
                       {isCorrect
                         ? copy.correct
                         : `${copy.correctWith}${question.correctMeaning}`}
@@ -451,16 +545,16 @@ export function MusicQuizClient({
             })}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
             <button
               type="button"
               onClick={() => updateCurrentPage(currentPage - 1)}
               disabled={currentPage === 0}
-              className="rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
             >
               {copy.previousPage}
             </button>
-            <div className="flex items-center gap-2 text-sm text-muted">
+            <div className="flex items-center gap-2 text-xs text-muted">
               <input
                 type="number"
                 min={1}
@@ -490,7 +584,7 @@ export function MusicQuizClient({
 
                   updateCurrentPage(parsed - 1)
                 }}
-                className="w-16 rounded-full border border-border bg-surface px-3 py-1 text-center text-foreground outline-none transition focus:border-brand"
+                className="w-14 rounded-full border border-border bg-surface px-2.5 py-1 text-center text-xs text-foreground outline-none transition focus:border-brand"
               />
               <span>/ {totalPages}</span>
             </div>
@@ -498,27 +592,27 @@ export function MusicQuizClient({
               type="button"
               onClick={() => updateCurrentPage(currentPage + 1)}
               disabled={currentPage >= totalPages - 1}
-              className="rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
             >
               {copy.nextPage}
             </button>
           </div>
         </>
       ) : (
-        <section className="glass-panel rounded-[28px] border border-border p-6">
-          <p className="text-sm text-muted">{copy.empty}</p>
+        <section className="glass-panel rounded-[24px] border border-border p-5">
+          <p className="text-xs text-muted">{copy.empty}</p>
         </section>
       )}
 
       {questions.length > 0 ? (
-        <footer className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-full border border-border bg-background/92 px-5 py-3 shadow-lg backdrop-blur-xl">
-          <div className="flex items-center justify-between gap-3 text-sm">
+        <footer className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-full border border-border bg-background/92 px-4 py-2.5 shadow-lg backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 text-xs">
             <div className="min-w-0">
               <p className="font-medium text-muted">
                 {copy.score} {score} / {visibleQuestions.length}
               </p>
               {user ? (
-                <p className="truncate text-xs text-muted">
+                <p className="truncate text-[11px] text-muted">
                   {saveState === 'saving' || isPending
                     ? copy.saving
                     : saveState === 'saved'

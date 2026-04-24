@@ -43,6 +43,7 @@ export interface MusicQuizQuestion {
   difficulty: VocabDifficulty;
   correctMeaning: string;
   options: string[];
+  lyricHint: string;
 }
 
 export interface MusicQuizAttemptAnswer {
