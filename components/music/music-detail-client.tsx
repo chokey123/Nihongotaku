@@ -8,6 +8,7 @@ import type {
   Locale,
   LocalizedText,
   MusicItem,
+  MusicSearchPage,
   MusicVocabItem,
 } from '@/lib/types'
 import { MusicCard } from '@/components/ui/music-card'
@@ -335,6 +336,8 @@ const vocabPanelCopy = {
 } as const
 
 const MUSIC_RAIL_BATCH_SIZE = 6
+const RELATED_MUSIC_FETCH_LIMIT = 24
+const RECOMMENDED_MUSIC_LIMIT = 12
 
 function MusicRail({
   eyebrow,
@@ -350,11 +353,42 @@ function MusicRail({
   locale: Locale
 }) {
   const [visibleCount, setVisibleCount] = useState(MUSIC_RAIL_BATCH_SIZE)
+  const [hasEnteredViewport, setHasEnteredViewport] = useState(false)
+  const railRef = useRef<HTMLElement | null>(null)
 
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
     [items, visibleCount],
   )
+
+  useEffect(() => {
+    const rail = railRef.current
+
+    if (!rail || hasEnteredViewport) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) {
+          return
+        }
+
+        setHasEnteredViewport(true)
+        observer.disconnect()
+      },
+      {
+        rootMargin: '0px 0px 120px 0px',
+        threshold: 0.05,
+      },
+    )
+
+    observer.observe(rail)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [hasEnteredViewport])
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -374,7 +408,10 @@ function MusicRail({
   )
 
   return (
-    <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
+    <section
+      ref={railRef}
+      className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8"
+    >
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-strong">
           {eyebrow}
@@ -386,19 +423,23 @@ function MusicRail({
           <p className="mt-2 text-sm text-muted">{description}</p>
         ) : null}
       </div>
-      <div
-        className="flex min-w-0 gap-5 overflow-x-auto pb-3"
-        onScroll={handleScroll}
-      >
-        {visibleItems.map((music) => (
-          <div
-            key={music.id}
-            className="h-[316px] w-[280px] shrink-0 sm:h-[316px] sm:w-[320px] lg:h-[316px] lg:w-[340px]"
-          >
-            <MusicCard item={music} locale={locale} fixedSplit />
-          </div>
-        ))}
-      </div>
+      {hasEnteredViewport ? (
+        <div
+          className="flex min-w-0 gap-5 overflow-x-auto pb-3"
+          onScroll={handleScroll}
+        >
+          {visibleItems.map((music) => (
+            <div
+              key={music.id}
+              className="h-[316px] w-[280px] shrink-0 sm:h-[316px] sm:w-[320px] lg:h-[316px] lg:w-[340px]"
+            >
+              <MusicCard item={music} locale={locale} fixedSplit />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="h-[316px]" aria-hidden="true" />
+      )}
     </section>
   )
 }
@@ -408,15 +449,11 @@ export function MusicDetailClient({
   dict,
   locale,
   showQuizLink = true,
-  sameArtistMusic = [],
-  recommendedMusic = [],
 }: {
   item: MusicItem
   dict: Dictionary
   locale: Locale
   showQuizLink?: boolean
-  sameArtistMusic?: MusicItem[]
-  recommendedMusic?: MusicItem[]
 }) {
   const {
     currentMs,
@@ -428,15 +465,24 @@ export function MusicDetailClient({
   } = useYoutubePlayer(item.youtubeId)
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null)
   const lyricLineRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const playerShellRef = useRef<HTMLDivElement | null>(null)
   const vocabReviewRef = useRef<HTMLElement | null>(null)
+  const relatedMusicTriggerRef = useRef<HTMLDivElement | null>(null)
   const vocabScrollRef = useRef<HTMLDivElement | null>(null)
+  const controlsFadeTimeoutRef = useRef<number | null>(null)
   const [selectedReviewVocabIds, setSelectedReviewVocabIds] = useState<
     string[]
   >([])
+  const [playerInteractionActive, setPlayerInteractionActive] = useState(false)
+  const [sameArtistMusic, setSameArtistMusic] = useState<MusicItem[]>([])
+  const [recommendedMusic, setRecommendedMusic] = useState<MusicItem[]>([])
+  const [shouldLoadRelatedMusic, setShouldLoadRelatedMusic] = useState(false)
+  const [hasLoadedRelatedMusic, setHasLoadedRelatedMusic] = useState(false)
   const [vocabScrollState, setVocabScrollState] = useState({
     canScrollLeft: false,
     canScrollRight: false,
   })
+  const playerControlsVisible = !isPlaying || playerInteractionActive
 
   const activeLine = useMemo(() => {
     if (!hasTimelineStarted || item.lyrics.length === 0) {
@@ -548,6 +594,221 @@ export function MusicDetailClient({
       behavior: 'smooth',
     })
   }, [activeLine])
+
+  useEffect(() => {
+    const trigger = relatedMusicTriggerRef.current
+
+    if (!trigger || shouldLoadRelatedMusic) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) {
+          return
+        }
+
+        setShouldLoadRelatedMusic(true)
+        observer.disconnect()
+      },
+      {
+        rootMargin: '0px 0px 320px 0px',
+        threshold: 0.01,
+      },
+    )
+
+    observer.observe(trigger)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [shouldLoadRelatedMusic])
+
+  useEffect(() => {
+    if (!shouldLoadRelatedMusic || hasLoadedRelatedMusic) {
+      return
+    }
+
+    let cancelled = false
+
+    const fetchMusicPage = async (params: URLSearchParams) => {
+      const response = await fetch(`/api/music?${params.toString()}`, {
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch music page: ${response.status}`)
+      }
+
+      return (await response.json()) as MusicSearchPage
+    }
+
+    const loadRelatedMusic = async () => {
+      try {
+        const sameArtistParams = new URLSearchParams({
+          artist: item.artist,
+          limit: String(RELATED_MUSIC_FETCH_LIMIT),
+        })
+        const latestParams = new URLSearchParams({
+          limit: String(RELATED_MUSIC_FETCH_LIMIT),
+        })
+
+        const requests: [
+          Promise<MusicSearchPage>,
+          Promise<MusicSearchPage>,
+          Promise<MusicSearchPage>,
+        ] = [
+          fetchMusicPage(sameArtistParams),
+          item.genre
+            ? fetchMusicPage(
+                new URLSearchParams({
+                  genre: item.genre,
+                  limit: String(RELATED_MUSIC_FETCH_LIMIT),
+                }),
+              )
+            : Promise.resolve({
+                items: [],
+                total: 0,
+                offset: 0,
+                limit: RELATED_MUSIC_FETCH_LIMIT,
+                hasMore: false,
+              }),
+          fetchMusicPage(latestParams),
+        ]
+
+        const [sameArtistPage, sameGenrePage, latestPage] =
+          await Promise.all(requests)
+
+        if (cancelled) {
+          return
+        }
+
+        const nextSameArtistMusic = sameArtistPage.items
+          .filter((entry) => entry.id !== item.id)
+          .slice(0, RELATED_MUSIC_FETCH_LIMIT)
+
+        const excludedMusicIds = new Set([
+          item.id,
+          ...nextSameArtistMusic.map((entry) => entry.id),
+        ])
+
+        const nextRecommendedMusic = [
+          ...sameGenrePage.items.filter((entry) => !excludedMusicIds.has(entry.id)),
+          ...latestPage.items.filter((entry) => !excludedMusicIds.has(entry.id)),
+        ]
+          .filter(
+            (entry, index, array) =>
+              array.findIndex((candidate) => candidate.id === entry.id) === index,
+          )
+          .slice(0, RECOMMENDED_MUSIC_LIMIT)
+
+        setSameArtistMusic(nextSameArtistMusic)
+        setRecommendedMusic(nextRecommendedMusic)
+      } catch {
+        if (!cancelled) {
+          setSameArtistMusic([])
+          setRecommendedMusic([])
+        }
+      } finally {
+        if (!cancelled) {
+          setHasLoadedRelatedMusic(true)
+        }
+      }
+    }
+
+    void loadRelatedMusic()
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasLoadedRelatedMusic, item.artist, item.genre, item.id, shouldLoadRelatedMusic])
+
+  useEffect(() => {
+    const shell = playerShellRef.current
+
+    if (!shell) {
+      return
+    }
+
+    const hideControls = () => {
+      if (controlsFadeTimeoutRef.current !== null) {
+        window.clearTimeout(controlsFadeTimeoutRef.current)
+        controlsFadeTimeoutRef.current = null
+      }
+
+      setPlayerInteractionActive(false)
+    }
+
+    const showControls = () => {
+      setPlayerInteractionActive(true)
+
+      if (controlsFadeTimeoutRef.current !== null) {
+        window.clearTimeout(controlsFadeTimeoutRef.current)
+      }
+
+      controlsFadeTimeoutRef.current = window.setTimeout(() => {
+        setPlayerInteractionActive(false)
+        controlsFadeTimeoutRef.current = null
+      }, 3200)
+    }
+
+    const handlePointerDown = () => {
+      showControls()
+    }
+
+    const handleTouchStart = () => {
+      showControls()
+    }
+
+    const handleClick = () => {
+      showControls()
+    }
+
+    const handleFocusIn = () => {
+      showControls()
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (shell.contains(event.target as Node | null)) {
+        showControls()
+        return
+      }
+
+      hideControls()
+    }
+
+    const handleWindowBlur = () => {
+      window.setTimeout(() => {
+        const activeElement = document.activeElement
+
+        if (activeElement instanceof HTMLIFrameElement) {
+          showControls()
+        }
+      }, 0)
+    }
+
+    const iframe = shell.querySelector('iframe')
+
+    shell.addEventListener('pointerdown', handlePointerDown)
+    shell.addEventListener('touchstart', handleTouchStart, { passive: true })
+    shell.addEventListener('click', handleClick)
+    shell.addEventListener('focusin', handleFocusIn)
+    document.addEventListener('click', handleDocumentClick, true)
+    window.addEventListener('blur', handleWindowBlur)
+    iframe?.addEventListener('focus', handleFocusIn)
+
+    return () => {
+      shell.removeEventListener('pointerdown', handlePointerDown)
+      shell.removeEventListener('touchstart', handleTouchStart)
+      shell.removeEventListener('click', handleClick)
+      shell.removeEventListener('focusin', handleFocusIn)
+      document.removeEventListener('click', handleDocumentClick, true)
+      window.removeEventListener('blur', handleWindowBlur)
+      iframe?.removeEventListener('focus', handleFocusIn)
+
+      hideControls()
+    }
+  }, [])
 
   const syncVocabScrollState = useCallback(() => {
     const container = vocabScrollRef.current
@@ -711,7 +972,10 @@ export function MusicDetailClient({
               </button>
             </span>
           </div>
-          <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[26px] border border-border lg:max-w-[1280px]">
+          <div
+            ref={playerShellRef}
+            className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[26px] border border-border lg:max-w-[1280px]"
+          >
             <div id="music-player-frame" className="aspect-video w-full" />
             {selectedLineVocabs.length > 0 ? (
               <div className="pointer-events-none absolute left-2 top-[42%] z-20 flex max-h-[58%] max-w-[56%] -translate-y-1/2 flex-col gap-1.5 overflow-hidden px-1 py-1 sm:left-4 sm:top-[44%] sm:max-h-[60%] sm:max-w-[292px]">
@@ -789,7 +1053,13 @@ export function MusicDetailClient({
               </div>
             ) : null}
             {activeLine ? (
-              <div className="pointer-events-none absolute inset-x-3 bottom-[22%] z-10 flex justify-center px-2 sm:inset-x-6 sm:bottom-[20%]">
+              <div
+                className={`pointer-events-none absolute inset-x-3 z-10 flex justify-center px-2 transition-all duration-300 sm:inset-x-6 ${
+                  playerControlsVisible
+                    ? 'bottom-[22%] sm:bottom-[20%]'
+                    : 'bottom-[7%] sm:bottom-[6%]'
+                }`}
+              >
                 <div className="max-w-[92%] rounded-[14px] border border-white/10 border-l-2 border-l-brand bg-black/28 px-4 py-2.5 text-center backdrop-blur-[2px]">
                   <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
                     {activeLine.japanese}
@@ -1195,6 +1465,7 @@ export function MusicDetailClient({
           </section>
         ) : null}
       </div>
+      <div ref={relatedMusicTriggerRef} className="h-px w-full" aria-hidden="true" />
       {sameArtistMusic.length > 0 ? (
         <MusicRail
           eyebrow={sameArtistCopy[locale].eyebrow}

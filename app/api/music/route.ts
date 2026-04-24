@@ -29,6 +29,7 @@ export async function GET(request: Request) {
   const genre = url.searchParams.get('genre')
   const limit = parsePositiveInteger(url.searchParams.get('limit'), PAGE_SIZE)
   const offset = parseOffset(url.searchParams.get('offset'))
+  const includeFilters = url.searchParams.get('includeFilters') === '1'
 
   const page = await backendService.searchMusicPage(query, {
     artist,
@@ -37,5 +38,15 @@ export async function GET(request: Request) {
     offset,
   })
 
-  return Response.json(page)
+  if (!includeFilters) {
+    return Response.json(page)
+  }
+
+  const filters = await backendService.getMusicFilterOptions()
+
+  return Response.json({
+    ...page,
+    artistFilterOptions: filters.artists,
+    genreFilterOptions: filters.genres,
+  })
 }

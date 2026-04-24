@@ -64,10 +64,6 @@ function normalizeText(value: string) {
 export function HomePageShell({
   lang,
   dict,
-  music,
-  musicTotal,
-  artistFilterOptions,
-  genreFilterOptions,
 }: {
   lang: string
   dict: {
@@ -80,10 +76,6 @@ export function HomePageShell({
       songLibrary: string
     }
   }
-  music: MusicItem[]
-  musicTotal: number
-  artistFilterOptions: MusicFilterOption[]
-  genreFilterOptions: MusicFilterOption[]
 }) {
   const locale: SupportedLocale =
     lang === 'zh' || lang === 'en' || lang === 'ja' ? lang : 'zh'
@@ -97,15 +89,23 @@ export function HomePageShell({
   const [query, setQuery] = useState('')
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null)
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null)
-  const [visibleMusic, setVisibleMusic] = useState(music)
-  const [totalMusic, setTotalMusic] = useState(musicTotal)
+  const [visibleMusic, setVisibleMusic] = useState<MusicItem[]>([])
+  const [totalMusic, setTotalMusic] = useState(0)
+  const [artistFilterOptions, setArtistFilterOptions] = useState<
+    MusicFilterOption[]
+  >([])
+  const [genreFilterOptions, setGenreFilterOptions] = useState<
+    MusicFilterOption[]
+  >([])
   const [visibleArtistFilterCount, setVisibleArtistFilterCount] =
     useState(FILTER_PAGE_SIZE)
   const [visibleGenreFilterCount, setVisibleGenreFilterCount] =
     useState(FILTER_PAGE_SIZE)
+  const [isBootstrappingMusic, setIsBootstrappingMusic] = useState(true)
   const [isRefreshingMusic, setIsRefreshingMusic] = useState(false)
   const [isLoadingMoreMusic, setIsLoadingMoreMusic] = useState(false)
-  const hasMountedRef = useRef(false)
+  const [showScrollToTop, setShowScrollToTop] = useState(false)
+  const hasHydratedFiltersRef = useRef(false)
   const requestIdRef = useRef(0)
   const loadMoreRequestIdRef = useRef(0)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
@@ -162,6 +162,61 @@ export function HomePageShell({
     return [...unique.values()]
   }, [copy.suggestionArtist, copy.suggestionSong, draftQuery, visibleMusic])
 
+  useEffect(() => {
+    let cancelled = false
+
+    const bootstrapMusic = async () => {
+      setIsBootstrappingMusic(true)
+
+      try {
+        const params = new URLSearchParams({
+          limit: String(MUSIC_PAGE_SIZE),
+          includeFilters: '1',
+        })
+        const response = await fetch(`/api/music?${params.toString()}`)
+
+        if (!response.ok) {
+          throw new Error('Failed to bootstrap music')
+        }
+
+        const payload = (await response.json()) as MusicSearchPage & {
+          artistFilterOptions?: MusicFilterOption[]
+          genreFilterOptions?: MusicFilterOption[]
+        }
+
+        if (cancelled) {
+          return
+        }
+
+        setVisibleMusic(payload.items)
+        setTotalMusic(payload.total)
+        setArtistFilterOptions(payload.artistFilterOptions ?? [])
+        setGenreFilterOptions(payload.genreFilterOptions ?? [])
+        hasHydratedFiltersRef.current = true
+      } catch {
+        if (cancelled) {
+          return
+        }
+
+        setVisibleMusic([])
+        setTotalMusic(0)
+        setArtistFilterOptions([])
+        setGenreFilterOptions([])
+        hasHydratedFiltersRef.current = true
+      } finally {
+        if (!cancelled) {
+          setIsBootstrappingMusic(false)
+        }
+      }
+    }
+
+    void bootstrapMusic()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const loadMusicPage = useCallback(
     async (offset: number) => {
       const params = new URLSearchParams({
@@ -194,8 +249,7 @@ export function HomePageShell({
   )
 
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true
+    if (!hasHydratedFiltersRef.current) {
       return
     }
 
@@ -237,7 +291,12 @@ export function HomePageShell({
   const hasMoreMusic = visibleMusic.length < totalMusic
 
   const loadMoreMusic = useCallback(() => {
-    if (isRefreshingMusic || isLoadingMoreMusic || !hasMoreMusic) {
+    if (
+      isBootstrappingMusic ||
+      isRefreshingMusic ||
+      isLoadingMoreMusic ||
+      !hasMoreMusic
+    ) {
       return
     }
 
@@ -265,6 +324,7 @@ export function HomePageShell({
       })
   }, [
     hasMoreMusic,
+    isBootstrappingMusic,
     isLoadingMoreMusic,
     isRefreshingMusic,
     loadMusicPage,
@@ -292,6 +352,19 @@ export function HomePageShell({
       observer.disconnect()
     }
   }, [loadMoreMusic])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollToTop(window.scrollY > 640)
+    }
+
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
 
   const appliedFilters = useMemo(
     () =>
@@ -336,6 +409,9 @@ export function HomePageShell({
             suggestions={suggestions}
             placeholder={copy.searchPlaceholder}
             suppressHydrationWarning
+            onFocus={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
             onValueChange={setDraftQuery}
             onSelect={(option) => {
               setDraftQuery(option.value)
@@ -495,7 +571,15 @@ export function HomePageShell({
             {copy.results} · {copy.resultCount(totalMusic)}
           </p>
         </div>
-        {visibleMusic.length > 0 ? (
+        {isBootstrappingMusic ? (
+          <div className="glass-panel rounded-[28px] border border-border px-6 py-8 text-sm text-muted">
+            {locale === 'en'
+              ? 'Loading music...'
+              : locale === 'ja'
+                ? '楽曲を読み込み中...'
+                : '正在載入歌曲...'}
+          </div>
+        ) : visibleMusic.length > 0 ? (
           <div
             className={`grid gap-5 transition-opacity md:grid-cols-2 xl:grid-cols-3 ${
               isRefreshingMusic ? 'opacity-60' : 'opacity-100'
@@ -510,13 +594,41 @@ export function HomePageShell({
             {copy.noResults}
           </div>
         )}
-        <div ref={loadMoreRef} className="h-8" aria-hidden="true" />
+        {!isBootstrappingMusic ? (
+          <div ref={loadMoreRef} className="h-8" aria-hidden="true" />
+        ) : null}
         {isLoadingMoreMusic ? (
           <p className="text-center text-sm font-medium text-muted">
             {locale === 'en' ? 'Loading more songs...' : 'Loading more music...'}
           </p>
         ) : null}
       </section>
+      <button
+        type="button"
+        aria-label={locale === 'en' ? 'Back to top' : locale === 'ja' ? '上に戻る' : '回到頂部'}
+        onClick={() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        className={`fixed bottom-5 right-5 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-lg backdrop-blur transition-all hover:border-brand hover:text-brand-strong sm:bottom-6 sm:right-6 ${
+          showScrollToTop
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-3 opacity-0'
+        }`}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 19V5" />
+          <path d="m5 12 7-7 7 7" />
+        </svg>
+      </button>
     </div>
   )
 }
