@@ -241,6 +241,27 @@ function getExternalHref(value: string) {
   return `https://${trimmed}`
 }
 
+function getWishPromptCopy(locale: Locale) {
+  if (locale === 'en') {
+    return {
+      title: 'Want another song?',
+      action: 'Make a wish',
+    }
+  }
+
+  if (locale === 'ja') {
+    return {
+      title: '次に聴きたい曲はありますか？',
+      action: 'リクエストする',
+    }
+  }
+
+  return {
+    title: '還想聽別的歌？',
+    action: '去許願',
+  }
+}
+
 function getVocabCardDensity({
   word,
   furigana,
@@ -345,50 +366,23 @@ function MusicRail({
   description,
   items,
   locale,
+  isLoading = false,
+  emptyMessage,
 }: {
   eyebrow: string
   title: string
   description?: string
   items: MusicItem[]
   locale: Locale
+  isLoading?: boolean
+  emptyMessage?: string
 }) {
   const [visibleCount, setVisibleCount] = useState(MUSIC_RAIL_BATCH_SIZE)
-  const [hasEnteredViewport, setHasEnteredViewport] = useState(false)
-  const railRef = useRef<HTMLElement | null>(null)
 
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
     [items, visibleCount],
   )
-
-  useEffect(() => {
-    const rail = railRef.current
-
-    if (!rail || hasEnteredViewport) {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) {
-          return
-        }
-
-        setHasEnteredViewport(true)
-        observer.disconnect()
-      },
-      {
-        rootMargin: '0px 0px 120px 0px',
-        threshold: 0.05,
-      },
-    )
-
-    observer.observe(rail)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [hasEnteredViewport])
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -408,10 +402,7 @@ function MusicRail({
   )
 
   return (
-    <section
-      ref={railRef}
-      className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8"
-    >
+    <section className="min-w-0 space-y-5 overflow-hidden border-t border-border pt-8">
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-strong">
           {eyebrow}
@@ -423,7 +414,24 @@ function MusicRail({
           <p className="mt-2 text-sm text-muted">{description}</p>
         ) : null}
       </div>
-      {hasEnteredViewport ? (
+      {isLoading ? (
+        <div className="flex min-w-0 gap-5 overflow-x-auto pb-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={`music-rail-loading-${index}`}
+              className="h-[316px] w-[280px] shrink-0 rounded-[22px] border border-border/80 bg-surface p-4 shadow-sm sm:w-[320px] lg:w-[340px]"
+            >
+              <div className="h-1/2 rounded-[16px] bg-brand-soft/30" />
+              <div className="mt-4 space-y-3">
+                <div className="h-4 w-24 rounded-full bg-border/70" />
+                <div className="h-6 w-3/4 rounded-full bg-border/70" />
+                <div className="h-4 w-2/3 rounded-full bg-border/60" />
+                <div className="h-4 w-20 rounded-full bg-border/50" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : visibleItems.length > 0 ? (
         <div
           className="flex min-w-0 gap-5 overflow-x-auto pb-3"
           onScroll={handleScroll}
@@ -438,7 +446,9 @@ function MusicRail({
           ))}
         </div>
       ) : (
-        <div className="h-[316px]" aria-hidden="true" />
+        <div className="flex h-[140px] items-center rounded-[20px] border border-dashed border-border bg-surface/60 px-5 text-sm text-muted">
+          {emptyMessage ?? 'No music available yet.'}
+        </div>
       )}
     </section>
   )
@@ -455,6 +465,7 @@ export function MusicDetailClient({
   locale: Locale
   showQuizLink?: boolean
 }) {
+  const wishPromptCopy = getWishPromptCopy(locale)
   const {
     currentMs,
     hasTimelineStarted,
@@ -1466,22 +1477,58 @@ export function MusicDetailClient({
         ) : null}
       </div>
       <div ref={relatedMusicTriggerRef} className="h-px w-full" aria-hidden="true" />
-      {sameArtistMusic.length > 0 ? (
-        <MusicRail
-          eyebrow={sameArtistCopy[locale].eyebrow}
-          title={sameArtistCopy[locale].title(item.artist)}
-          description={sameArtistCopy[locale].description}
-          items={sameArtistMusic}
-          locale={locale}
-        />
-      ) : null}
-      {recommendedMusic.length > 0 ? (
-        <MusicRail
-          eyebrow={recommendedCopy[locale].eyebrow}
-          title={recommendedCopy[locale].title}
-          items={recommendedMusic}
-          locale={locale}
-        />
+      <MusicRail
+        eyebrow={sameArtistCopy[locale].eyebrow}
+        title={sameArtistCopy[locale].title(item.artist)}
+        description={sameArtistCopy[locale].description}
+        items={sameArtistMusic}
+        locale={locale}
+        isLoading={!hasLoadedRelatedMusic}
+        emptyMessage={
+          locale === 'en'
+            ? `No more songs from ${item.artist} yet.`
+            : locale === 'ja'
+              ? `${item.artist} の他の曲はまだありません。`
+              : `暫時沒有更多 ${item.artist} 的歌曲。`
+        }
+      />
+      <MusicRail
+        eyebrow={recommendedCopy[locale].eyebrow}
+        title={recommendedCopy[locale].title}
+        items={recommendedMusic}
+        locale={locale}
+        isLoading={!hasLoadedRelatedMusic}
+        emptyMessage={
+          locale === 'en'
+            ? 'No recommendations available yet.'
+            : locale === 'ja'
+              ? 'おすすめの楽曲はまだありません。'
+            : '暫時沒有推薦歌曲。'
+        }
+      />
+      {hasLoadedRelatedMusic ? (
+        <section className="border-t border-border pt-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-brand/15 bg-brand-soft/10 px-5 py-4">
+            <div>
+              <p className="text-sm font-semibold text-brand-strong">
+                {wishPromptCopy.title}
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                {locale === 'en'
+                  ? 'Tell us what you want to learn next.'
+                  : locale === 'ja'
+                    ? '次に学びたい曲を教えてください。'
+                    : '把你想學的歌告訴我們。'}
+              </p>
+            </div>
+            <Link
+              href={`/${locale}/wish`}
+              className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-strong"
+            >
+              {wishPromptCopy.action}
+            </Link>
+          </div>
+        </section>
       ) : null}
     </div>
   )

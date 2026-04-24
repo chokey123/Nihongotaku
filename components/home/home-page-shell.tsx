@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MusicCard } from '@/components/ui/music-card'
@@ -61,6 +62,27 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase()
 }
 
+function getWishCtaCopy(locale: SupportedLocale) {
+  if (locale === 'en') {
+    return {
+      before: 'No song for you yet?',
+      highlight: 'Make a wish',
+    }
+  }
+
+  if (locale === 'ja') {
+    return {
+      before: '聴きたい曲がない？',
+      highlight: 'リクエスト',
+    }
+  }
+
+  return {
+    before: '沒喜歡的歌？去',
+    highlight: '許願',
+  }
+}
+
 export function HomePageShell({
   lang,
   dict,
@@ -82,7 +104,8 @@ export function HomePageShell({
   const copy = homeShellCopy[locale]
   const appliedFilterLabels = {
     search: locale === 'en' ? 'Search' : locale === 'ja' ? '検索' : '搜尋',
-    artist: locale === 'en' ? 'Artist' : locale === 'ja' ? 'アーティスト' : '歌手',
+    artist:
+      locale === 'en' ? 'Artist' : locale === 'ja' ? 'アーティスト' : '歌手',
     genre: locale === 'en' ? 'Genre' : locale === 'ja' ? 'ジャンル' : '曲風',
   }
   const [draftQuery, setDraftQuery] = useState('')
@@ -109,6 +132,8 @@ export function HomePageShell({
   const requestIdRef = useRef(0)
   const loadMoreRequestIdRef = useRef(0)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const showWishPrompt =
+    showScrollToTop && visibleMusic.length > MUSIC_PAGE_SIZE * 3
 
   const topArtists = useMemo(
     () => artistFilterOptions.slice(0, visibleArtistFilterCount),
@@ -312,7 +337,9 @@ export function HomePageShell({
 
         setVisibleMusic((current) => {
           const existingIds = new Set(current.map((item) => item.id))
-          const nextItems = page.items.filter((item) => !existingIds.has(item.id))
+          const nextItems = page.items.filter(
+            (item) => !existingIds.has(item.id),
+          )
           return [...current, ...nextItems]
         })
         setTotalMusic(page.total)
@@ -381,7 +408,14 @@ export function HomePageShell({
       ].filter((entry): entry is { label: string; value: string } =>
         Boolean(entry?.value),
       ),
-    [appliedFilterLabels.artist, appliedFilterLabels.genre, appliedFilterLabels.search, query, selectedArtist, selectedGenre],
+    [
+      appliedFilterLabels.artist,
+      appliedFilterLabels.genre,
+      appliedFilterLabels.search,
+      query,
+      selectedArtist,
+      selectedGenre,
+    ],
   )
 
   return (
@@ -456,7 +490,8 @@ export function HomePageShell({
             <div className="flex flex-wrap gap-2">
               {topArtists.map((artist) => {
                 const isActive =
-                  normalizeText(selectedArtist ?? '') === normalizeText(artist.value)
+                  normalizeText(selectedArtist ?? '') ===
+                  normalizeText(artist.value)
 
                 return (
                   <button
@@ -464,7 +499,8 @@ export function HomePageShell({
                     type="button"
                     onClick={() =>
                       setSelectedArtist((current) =>
-                        current && normalizeText(current) === normalizeText(artist.value)
+                        current &&
+                        normalizeText(current) === normalizeText(artist.value)
                           ? null
                           : artist.value,
                       )
@@ -484,10 +520,13 @@ export function HomePageShell({
                   type="button"
                   onClick={() =>
                     setVisibleArtistFilterCount((current) =>
-                      Math.min(current + FILTER_PAGE_SIZE, artistFilterOptions.length),
+                      Math.min(
+                        current + FILTER_PAGE_SIZE,
+                        artistFilterOptions.length,
+                      ),
                     )
                   }
-                  className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
+                  className="rounded-full border border-brand/25 bg-brand-soft/55 px-4 py-2 text-sm font-semibold text-brand-strong transition hover:border-brand/45 hover:bg-brand-soft hover:text-brand"
                 >
                   {moreLabel}
                 </button>
@@ -502,7 +541,8 @@ export function HomePageShell({
             <div className="flex flex-wrap gap-2">
               {topGenres.map((genre) => {
                 const isActive =
-                  normalizeText(selectedGenre ?? '') === normalizeText(genre.value)
+                  normalizeText(selectedGenre ?? '') ===
+                  normalizeText(genre.value)
 
                 return (
                   <button
@@ -510,7 +550,8 @@ export function HomePageShell({
                     type="button"
                     onClick={() =>
                       setSelectedGenre((current) =>
-                        current && normalizeText(current) === normalizeText(genre.value)
+                        current &&
+                        normalizeText(current) === normalizeText(genre.value)
                           ? null
                           : genre.value,
                       )
@@ -530,7 +571,10 @@ export function HomePageShell({
                   type="button"
                   onClick={() =>
                     setVisibleGenreFilterCount((current) =>
-                      Math.min(current + FILTER_PAGE_SIZE, genreFilterOptions.length),
+                      Math.min(
+                        current + FILTER_PAGE_SIZE,
+                        genreFilterOptions.length,
+                      ),
                     )
                   }
                   className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:border-brand hover:text-brand-strong"
@@ -541,7 +585,7 @@ export function HomePageShell({
             </div>
           </div>
 
-          {(query || selectedArtist || selectedGenre) ? (
+          {query || selectedArtist || selectedGenre ? (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -599,13 +643,35 @@ export function HomePageShell({
         ) : null}
         {isLoadingMoreMusic ? (
           <p className="text-center text-sm font-medium text-muted">
-            {locale === 'en' ? 'Loading more songs...' : 'Loading more music...'}
+            {locale === 'en'
+              ? 'Loading more songs...'
+              : 'Loading more music...'}
           </p>
         ) : null}
       </section>
+      <Link
+        href={`/${lang}/wish`}
+        className={`fixed bottom-4 m-1.5 right-[4.8rem] z-30 inline-flex h-11 items-center rounded-full bg-background/55 px-3 text-sm font-medium text-muted backdrop-blur-md transition-all hover:text-foreground sm:bottom-5 sm:right-[5.4rem] ${
+          showWishPrompt
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-3 opacity-0'
+        }`}
+      >
+        <span>{getWishCtaCopy(locale).before}</span>{' '}
+        <span className="font-semibold text-brand-strong underline decoration-brand/50 underline-offset-4">
+          {getWishCtaCopy(locale).highlight}
+        </span>
+        {locale === 'zh' ? '！' : null}
+      </Link>
       <button
         type="button"
-        aria-label={locale === 'en' ? 'Back to top' : locale === 'ja' ? '上に戻る' : '回到頂部'}
+        aria-label={
+          locale === 'en'
+            ? 'Back to top'
+            : locale === 'ja'
+              ? '上に戻る'
+              : '回到頂部'
+        }
         onClick={() => {
           window.scrollTo({ top: 0, behavior: 'smooth' })
         }}

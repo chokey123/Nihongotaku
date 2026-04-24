@@ -7,6 +7,12 @@ import { startNavigationFeedback } from '@/components/providers/navigation-feedb
 import type { MusicItem } from '@/lib/types'
 import { useYoutubeThumbnail } from '@/components/ui/use-youtube-thumbnail'
 
+const quizHintLabel = {
+  zh: '去測驗',
+  ja: 'クイズへ',
+  en: 'Quiz',
+} as const
+
 const learnableVocabBadgeLabel = {
   zh: (count: number) => `${count}單詞`,
   ja: (count: number) => `${count}単語`,
@@ -95,9 +101,25 @@ export function MusicCard({
                 startNavigationFeedback()
                 router.push(quizHref)
               }}
-              className="text-left text-xs font-semibold text-brand-strong transition hover:text-brand"
+              className="inline-flex items-center gap-2 self-start rounded-full border border-brand/20 bg-brand-soft/40 px-2.5 py-1 text-left text-xs font-semibold text-brand-strong transition hover:border-brand/40 hover:text-brand"
             >
-              {resolvedMetaBadge}
+              <span>{resolvedMetaBadge}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-brand/80">
+                {quizHintLabel[normalizedLocale]}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-3 w-3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
             </button>
           ) : (
             <p className="text-xs font-semibold text-brand-strong">
