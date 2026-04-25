@@ -7,6 +7,43 @@ import type { Locale, MusicItem, MusicVocabItem } from '@/lib/types'
 const CANVAS_WIDTH = 1080
 const CANVAS_HEIGHT = 1080
 
+type MusicImageTemplateId = 'lyric-vocab' | 'ig-opening'
+
+const MUSIC_IMAGE_TEMPLATES: Array<{
+  id: MusicImageTemplateId
+  name: string
+  description: string
+  requiresLyricLine: boolean
+}> = [
+  {
+    id: 'lyric-vocab',
+    name: 'Lyric + vocab card',
+    description: 'Song lyric, translation, and vocab cards.',
+    requiresLyricLine: true,
+  },
+  {
+    id: 'ig-opening',
+    name: 'IG opening slide',
+    description: 'First carousel image: song title, artist, and lesson hook.',
+    requiresLyricLine: false,
+  },
+]
+
+const MUSIC_SECTION_LABELS = [
+  { ja: 'イントロ', zh: '前奏' },
+  { ja: 'Aメロ', zh: '主歌' },
+  { ja: 'Bメロ', zh: '前副歌' },
+  { ja: 'サビ', zh: '副歌' },
+  { ja: '間奏', zh: '間奏' },
+  { ja: 'Cメロ', zh: '2段主歌' },
+  { ja: '落ちサビ', zh: '靜止副歌' },
+  { ja: '大サビ', zh: '最後大副歌' },
+  { ja: 'アウトロ', zh: '尾奏' },
+].map((section) => ({
+  ...section,
+  label: `${section.ja} / ${section.zh}`,
+}))
+
 function getLocalizedText(
   value: Partial<Record<Locale, string>>,
   locale: Locale,
@@ -46,7 +83,10 @@ function drawCoverImage(
   width: number,
   height: number,
 ) {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
+  const scale = Math.max(
+    width / image.naturalWidth,
+    height / image.naturalHeight,
+  )
   const drawWidth = image.naturalWidth * scale
   const drawHeight = image.naturalHeight * scale
   const drawX = x + (width - drawWidth) / 2
@@ -63,7 +103,10 @@ function drawContainImage(
   width: number,
   height: number,
 ) {
-  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
+  const scale = Math.min(
+    width / image.naturalWidth,
+    height / image.naturalHeight,
+  )
   const drawWidth = image.naturalWidth * scale
   const drawHeight = image.naturalHeight * scale
   const drawX = x + (width - drawWidth) / 2
@@ -130,7 +173,9 @@ function roundRect(
 }
 
 function buildHighlightTokens(text: string, highlightWords: string[]) {
-  const normalizedWords = [...new Set(highlightWords.map((word) => word.trim()))]
+  const normalizedWords = [
+    ...new Set(highlightWords.map((word) => word.trim())),
+  ]
     .filter(Boolean)
     .sort((left, right) => right.length - left.length)
   const tokens: Array<{ text: string; highlight: boolean }> = []
@@ -230,7 +275,7 @@ function drawHighlightedWrappedText(
   },
 ) {
   ctx.save()
-  ctx.textAlign = 'left'
+  ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
 
   const lines = getHighlightedTextLines(
@@ -256,7 +301,14 @@ function drawHighlightedWrappedText(
         ctx.shadowColor = 'rgba(251, 146, 60, 0.36)'
         ctx.shadowBlur = 16
         ctx.fillStyle = colors.highlightGlow
-        roundRect(ctx, cursorX - 4, lineY + lineHeight - 24, tokenWidth + 8, 16, 8)
+        roundRect(
+          ctx,
+          cursorX - 4,
+          lineY + lineHeight - 24,
+          tokenWidth + 8,
+          16,
+          8,
+        )
         ctx.fill()
         ctx.shadowBlur = 0
         ctx.fillStyle = colors.highlightLine
@@ -304,10 +356,24 @@ function drawVocabCard(
   const centerY = y + height / 2
 
   ctx.fillStyle = 'rgba(249, 115, 22, 0.13)'
-  roundRect(ctx, x + 12 * scale, y + 12 * scale, leftWidth - 24 * scale, height - 24 * scale, 14 * scale)
+  roundRect(
+    ctx,
+    x + 12 * scale,
+    y + 12 * scale,
+    leftWidth - 24 * scale,
+    height - 24 * scale,
+    14 * scale,
+  )
   ctx.fill()
   ctx.fillStyle = 'rgba(249, 115, 22, 0.78)'
-  roundRect(ctx, x + 12 * scale, y + 12 * scale, 8 * scale, height - 24 * scale, 4 * scale)
+  roundRect(
+    ctx,
+    x + 12 * scale,
+    y + 12 * scale,
+    8 * scale,
+    height - 24 * scale,
+    4 * scale,
+  )
   ctx.fill()
 
   ctx.textAlign = 'center'
@@ -336,7 +402,7 @@ function drawVocabCard(
   ctx.fillStyle = '#111827'
   ctx.fillText(vocab.word, x + leftWidth / 2, centerY + 10 * scale)
 
-  ctx.textAlign = 'left'
+  ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
 
   const meaning = getChineseText(vocab.meaning)
@@ -390,7 +456,8 @@ function drawVocabCard(
     visibleBlocks.reduce(
       (total, block) => total + block.lines.length * block.lineHeight,
       0,
-    ) + Math.max(0, visibleBlocks.length - 1) * blockGap
+    ) +
+    Math.max(0, visibleBlocks.length - 1) * blockGap
   let textY = y + (height - textHeight) / 2
 
   visibleBlocks.forEach((block, blockIndex) => {
@@ -421,7 +488,62 @@ function drawFallbackBackground(
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 }
 
-async function renderImage({
+function getBackgroundSources(item: MusicItem, backgroundImageUrl: string) {
+  const trimmedBackgroundImageUrl = backgroundImageUrl.trim()
+
+  return [
+    ...(trimmedBackgroundImageUrl
+      ? [
+          `/api/image-proxy?url=${encodeURIComponent(
+            trimmedBackgroundImageUrl,
+          )}`,
+        ]
+      : []),
+    ...(item.youtubeId
+      ? [`/api/youtube-thumbnail?videoId=${encodeURIComponent(item.youtubeId)}`]
+      : []),
+  ]
+}
+
+async function drawMusicBackground(
+  ctx: CanvasRenderingContext2D,
+  item: MusicItem,
+  backgroundImageUrl: string,
+  options: {
+    blur: number
+    brightness: number
+    saturation: number
+    bleed: number
+  },
+) {
+  drawFallbackBackground(ctx, item)
+
+  for (const backgroundSource of getBackgroundSources(
+    item,
+    backgroundImageUrl,
+  )) {
+    try {
+      const image = await loadImage(backgroundSource)
+
+      ctx.save()
+      ctx.filter = `blur(${options.blur}px) brightness(${options.brightness}) saturate(${options.saturation})`
+      drawCoverImage(
+        ctx,
+        image,
+        -options.bleed,
+        -options.bleed,
+        CANVAS_WIDTH + options.bleed * 2,
+        CANVAS_HEIGHT + options.bleed * 2,
+      )
+      ctx.restore()
+      break
+    } catch {
+      continue
+    }
+  }
+}
+
+async function renderLyricVocabTemplate({
   item,
   lineId,
   locale,
@@ -448,39 +570,12 @@ async function renderImage({
     throw new Error('Canvas is not supported.')
   }
 
-  drawFallbackBackground(ctx, item)
-
-  const trimmedBackgroundImageUrl = backgroundImageUrl.trim()
-  const backgroundSources = [
-    ...(trimmedBackgroundImageUrl
-      ? [
-          `/api/image-proxy?url=${encodeURIComponent(
-            trimmedBackgroundImageUrl,
-          )}`,
-        ]
-      : []),
-    ...(item.youtubeId
-      ? [
-          `/api/youtube-thumbnail?videoId=${encodeURIComponent(
-            item.youtubeId,
-          )}`,
-        ]
-      : []),
-  ]
-
-  for (const backgroundSource of backgroundSources) {
-    try {
-      const image = await loadImage(backgroundSource)
-
-      ctx.save()
-      ctx.filter = 'blur(16px) brightness(0.92) saturate(1.14)'
-      drawCoverImage(ctx, image, -50, -50, CANVAS_WIDTH + 100, CANVAS_HEIGHT + 100)
-      ctx.restore()
-      break
-    } catch {
-      continue
-    }
-  }
+  await drawMusicBackground(ctx, item, backgroundImageUrl, {
+    blur: 16,
+    brightness: 0.92,
+    saturation: 1.14,
+    bleed: 50,
+  })
 
   const overlay = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT)
   overlay.addColorStop(0, 'rgba(255, 255, 255, 0.14)')
@@ -576,7 +671,8 @@ async function renderImage({
         translationMaxLines,
       )
       translationTextHeight = translationLines.length * translationLineHeight
-      lyricGap = translationLines.length > 0 ? Math.round(12 * (lyricFontSize / 50)) : 0
+      lyricGap =
+        translationLines.length > 0 ? Math.round(12 * (lyricFontSize / 50)) : 0
     } else {
       translationLines = []
       translationTextHeight = 0
@@ -657,7 +753,7 @@ async function renderImage({
           ? 800
           : cardCount === 3
             ? 760
-          : 430
+            : 430
     const cardHeight =
       cardCount === 1
         ? 224
@@ -677,7 +773,8 @@ async function renderImage({
     const topBound = Math.min(Math.max(lyricBlockBottom + 76, 520), 650)
     const bottomBound = cardCount <= 3 ? 942 : 976
     const availableHeight = bottomBound - topBound
-    const centerLift = cardCount === 1 ? 34 : cardCount === 2 ? 24 : cardCount === 3 ? 12 : 0
+    const centerLift =
+      cardCount === 1 ? 34 : cardCount === 2 ? 24 : cardCount === 3 ? 12 : 0
     const startY =
       topBound + Math.max(0, availableHeight - totalHeight) / 2 - centerLift
 
@@ -698,6 +795,195 @@ async function renderImage({
   return canvas.toDataURL('image/png')
 }
 
+async function renderIgOpeningTemplate({
+  item,
+  backgroundImageUrl,
+  sectionLabel,
+}: {
+  item: MusicItem
+  backgroundImageUrl: string
+  sectionLabel: string
+}) {
+  const canvas = document.createElement('canvas')
+  canvas.width = CANVAS_WIDTH
+  canvas.height = CANVAS_HEIGHT
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Canvas is not supported.')
+  }
+
+  await drawMusicBackground(ctx, item, backgroundImageUrl, {
+    blur: 4,
+    brightness: 0.98,
+    saturation: 1.1,
+    bleed: 16,
+  })
+
+  const softOverlay = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT)
+  softOverlay.addColorStop(0, 'rgba(255, 255, 255, 0.10)')
+  softOverlay.addColorStop(0.46, 'rgba(255, 255, 255, 0.18)')
+  softOverlay.addColorStop(1, 'rgba(255, 247, 237, 0.34)')
+  ctx.fillStyle = softOverlay
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+  const readableShade = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT)
+  readableShade.addColorStop(0, 'rgba(0, 0, 0, 0.16)')
+  readableShade.addColorStop(0.5, 'rgba(0, 0, 0, 0.04)')
+  readableShade.addColorStop(1, 'rgba(0, 0, 0, 0.28)')
+  ctx.fillStyle = readableShade
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+  ctx.save()
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.24)'
+  ctx.shadowBlur = 30
+  ctx.shadowOffsetY = 16
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.66)'
+  roundRect(ctx, 70, 64, CANVAS_WIDTH - 140, 778, 48)
+  ctx.fill()
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(249, 115, 22, 0.86)'
+  roundRect(ctx, 70, 64, 20, 778, 10)
+  ctx.fill()
+  ctx.restore()
+
+  try {
+    const logo = await loadImage('/api/brand-logo?variant=text')
+
+    ctx.save()
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.78)'
+    ctx.shadowBlur = 20
+    drawContainImage(ctx, logo, 205, 86, 670, 112)
+    ctx.restore()
+  } catch {
+    // The image should still render if the brand asset is not configured.
+  }
+
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.82)'
+  ctx.shadowBlur = 16
+  ctx.fillStyle = '#111827'
+  ctx.font = '900 68px system-ui, sans-serif'
+  ctx.fillText('歌詞から日本語を学ぶ', CANVAS_WIDTH / 2, 260)
+  ctx.fillStyle = '#7c2d12'
+  ctx.font = '900 76px system-ui, sans-serif'
+  ctx.fillText('從歌詞學日語', CANVAS_WIDTH / 2, 360)
+  ctx.restore()
+
+  ctx.save()
+  const divider = ctx.createLinearGradient(198, 478, 882, 478)
+  divider.addColorStop(0, 'rgba(249, 115, 22, 0)')
+  divider.addColorStop(0.18, 'rgba(249, 115, 22, 0.64)')
+  divider.addColorStop(0.5, 'rgba(124, 45, 18, 0.72)')
+  divider.addColorStop(0.82, 'rgba(249, 115, 22, 0.64)')
+  divider.addColorStop(1, 'rgba(249, 115, 22, 0)')
+  ctx.strokeStyle = divider
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(198, 478)
+  ctx.lineTo(882, 478)
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+
+  let artistFontSize = 58
+  ctx.font = `900 ${artistFontSize}px system-ui, sans-serif`
+  while (ctx.measureText(item.artist).width > 800 && artistFontSize > 34) {
+    artistFontSize -= 2
+    ctx.font = `900 ${artistFontSize}px system-ui, sans-serif`
+  }
+
+  ctx.fillStyle = '#7c2d12'
+  ctx.fillText(item.artist, CANVAS_WIDTH / 2, 540)
+
+  let titleFontSize = 80
+  ctx.font = `900 ${titleFontSize}px system-ui, sans-serif`
+  while (ctx.measureText(item.title).width > 820 && titleFontSize > 44) {
+    titleFontSize -= 2
+    ctx.font = `900 ${titleFontSize}px system-ui, sans-serif`
+  }
+
+  ctx.fillStyle = '#111827'
+  ctx.fillText(item.title, CANVAS_WIDTH / 2, 618)
+
+  const normalizedSectionLabel = sectionLabel.trim() || 'サビ / 副歌'
+  ctx.fillStyle = 'rgba(255, 247, 237, 0.82)'
+  roundRect(ctx, 238, 724, 604, 86, 43)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(249, 115, 22, 0.34)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = '#7c2d12'
+  ctx.font = '800 42px system-ui, sans-serif'
+  ctx.fillText(normalizedSectionLabel, CANVAS_WIDTH / 2, 744)
+  ctx.restore()
+
+  ctx.save()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.84)'
+  ctx.shadowBlur = 14
+  ctx.strokeStyle = '#7c2d12'
+  ctx.lineWidth = 5
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  ctx.moveTo(156, 944)
+  ctx.lineTo(218, 944)
+  ctx.moveTo(194, 920)
+  ctx.lineTo(220, 944)
+  ctx.lineTo(194, 968)
+  ctx.stroke()
+  ctx.fillStyle = '#7c2d12'
+  ctx.font = '900 46px system-ui, sans-serif'
+  ctx.fillText('滑動查看歌詞與文法解析', 274, 916)
+  ctx.fillStyle = 'rgba(4, 1, 0, 0.78)'
+  ctx.font = '700 34px system-ui, sans-serif'
+  ctx.fillText('右にスワイプして歌詞と文法解説をチェック！', 274, 970)
+  ctx.restore()
+
+  return canvas.toDataURL('image/png')
+}
+
+async function renderImage({
+  item,
+  lineId,
+  locale,
+  highlightWords,
+  backgroundImageUrl,
+  templateId,
+  sectionLabel,
+}: {
+  item: MusicItem
+  lineId: string
+  locale: Locale
+  highlightWords: string[]
+  backgroundImageUrl: string
+  templateId: MusicImageTemplateId
+  sectionLabel: string
+}) {
+  if (templateId === 'ig-opening') {
+    return renderIgOpeningTemplate({ item, backgroundImageUrl, sectionLabel })
+  }
+
+  return renderLyricVocabTemplate({
+    item,
+    lineId,
+    locale,
+    highlightWords,
+    backgroundImageUrl,
+  })
+}
+
 export function AdminMusicImageGenerator({
   locale,
   music,
@@ -712,11 +998,20 @@ export function AdminMusicImageGenerator({
     () => music.find((item) => item.id === selectedMusicId) ?? music[0],
     [music, selectedMusicId],
   )
+  const [selectedTemplateId, setSelectedTemplateId] =
+    useState<MusicImageTemplateId>('lyric-vocab')
+  const selectedTemplate =
+    MUSIC_IMAGE_TEMPLATES.find(
+      (template) => template.id === selectedTemplateId,
+    ) ?? MUSIC_IMAGE_TEMPLATES[0]
   const [selectedLineId, setSelectedLineId] = useState(
     selectedMusic?.lyrics[0]?.id ?? '',
   )
   const [highlightText, setHighlightText] = useState('')
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('')
+  const [sectionLabel, setSectionLabel] = useState(
+    MUSIC_SECTION_LABELS[3]?.label ?? '',
+  )
   const [previewUrl, setPreviewUrl] = useState('')
   const [status, setStatus] = useState('')
   const [isRendering, setIsRendering] = useState(false)
@@ -745,13 +1040,19 @@ export function AdminMusicImageGenerator({
     setSelectedMusicId(musicId)
     setSelectedLineId(nextMusic?.lyrics[0]?.id ?? '')
     setBackgroundImageUrl('')
+    setSectionLabel(MUSIC_SECTION_LABELS[3]?.label ?? '')
     setPreviewUrl('')
     setStatus('')
   }
 
   const handleRender = async () => {
-    if (!selectedMusic || !selectedLineId) {
-      setStatus('Select a song and lyric line first.')
+    if (!selectedMusic) {
+      setStatus('Select a song first.')
+      return
+    }
+
+    if (selectedTemplate.requiresLyricLine && !selectedLineId) {
+      setStatus('Select a lyric line first.')
       return
     }
 
@@ -765,6 +1066,8 @@ export function AdminMusicImageGenerator({
         locale: normalizedLocale,
         highlightWords: parseHighlightWords(highlightText),
         backgroundImageUrl,
+        templateId: selectedTemplate.id,
+        sectionLabel,
       })
       setPreviewUrl(nextPreviewUrl)
       setStatus('Image ready.')
@@ -776,10 +1079,10 @@ export function AdminMusicImageGenerator({
   }
 
   const downloadName = selectedMusic
-    ? `${selectedMusic.artist}-${selectedMusic.title}-lyric-card.png`
+    ? `${selectedMusic.artist}-${selectedMusic.title}-${selectedTemplate.id}.png`
         .replace(/[^\w.-]+/g, '-')
         .toLowerCase()
-    : 'lyric-card.png'
+    : `${selectedTemplate.id}.png`
   const defaultBackgroundUrl = selectedMusic?.youtubeId
     ? `/api/youtube-thumbnail?videoId=${encodeURIComponent(
         selectedMusic.youtubeId,
@@ -813,6 +1116,28 @@ export function AdminMusicImageGenerator({
         </label>
 
         <label className="block space-y-2 text-sm">
+          <span className="font-semibold">Template</span>
+          <select
+            value={selectedTemplate.id}
+            onChange={(event) => {
+              setSelectedTemplateId(event.target.value as MusicImageTemplateId)
+              setPreviewUrl('')
+              setStatus('')
+            }}
+            className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none"
+          >
+            {MUSIC_IMAGE_TEMPLATES.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+          <span className="block text-xs text-muted">
+            {selectedTemplate.description}
+          </span>
+        </label>
+
+        <label className="block space-y-2 text-sm">
           <span className="font-semibold">Lyric line</span>
           <select
             value={selectedLineId}
@@ -821,6 +1146,7 @@ export function AdminMusicImageGenerator({
               setPreviewUrl('')
               setStatus('')
             }}
+            disabled={!selectedTemplate.requiresLyricLine}
             className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none"
           >
             {(selectedMusic?.lyrics ?? []).map((line) => (
@@ -830,9 +1156,15 @@ export function AdminMusicImageGenerator({
               </option>
             ))}
           </select>
+          {!selectedTemplate.requiresLyricLine ? (
+            <span className="block text-xs text-muted">
+              This template uses song-level data, so it does not need a lyric
+              line.
+            </span>
+          ) : null}
         </label>
 
-        {selectedMusic && selectedLine ? (
+        {selectedMusic ? (
           <div className="rounded-[24px] border border-border bg-surface p-4">
             <p className="text-xs font-semibold uppercase text-muted">
               Template data
@@ -841,24 +1173,42 @@ export function AdminMusicImageGenerator({
               {selectedMusic.title}
             </h3>
             <p className="mt-1 text-sm text-muted">{selectedMusic.artist}</p>
-            <p className="mt-4 text-lg font-semibold">{selectedLine.japanese}</p>
-            <p className="mt-2 text-sm text-muted">
-              {getLocalizedText(selectedLine.translation, normalizedLocale)}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {lineVocabs.length > 0 ? (
-                lineVocabs.map((vocab) => (
-                  <span
-                    key={vocab.id}
-                    className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong"
-                  >
-                    {vocab.word}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-muted">No vocab on this line.</span>
-              )}
-            </div>
+            {selectedTemplate.id === 'ig-opening' ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-lg font-semibold">歌詞から日本語を学ぶ</p>
+                <p className="text-base font-semibold text-muted">
+                  從歌詞學日語
+                </p>
+                <p className="text-sm text-muted">
+                  {sectionLabel || 'サビ / 副歌'}
+                </p>
+              </div>
+            ) : selectedLine ? (
+              <>
+                <p className="mt-4 text-lg font-semibold">
+                  {selectedLine.japanese}
+                </p>
+                <p className="mt-2 text-sm text-muted">
+                  {getLocalizedText(selectedLine.translation, normalizedLocale)}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {lineVocabs.length > 0 ? (
+                    lineVocabs.map((vocab) => (
+                      <span
+                        key={vocab.id}
+                        className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong"
+                      >
+                        {vocab.word}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted">
+                      No vocab on this line.
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : null}
           </div>
         ) : null}
 
@@ -894,6 +1244,30 @@ export function AdminMusicImageGenerator({
           </span>
         </label>
 
+        {selectedTemplate.id === 'ig-opening' ? (
+          <label className="block space-y-2 text-sm">
+            <span className="font-semibold">Song section label</span>
+            <select
+              value={sectionLabel}
+              onChange={(event) => {
+                setSectionLabel(event.target.value)
+                setPreviewUrl('')
+                setStatus('')
+              }}
+              className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none"
+            >
+              {MUSIC_SECTION_LABELS.map((section) => (
+                <option key={section.label} value={section.label}>
+                  {section.ja} - {section.zh}
+                </option>
+              ))}
+            </select>
+            <span className="block text-xs text-muted">
+              Shown below the song title on the IG opening slide.
+            </span>
+          </label>
+        ) : null}
+
         <label className="block space-y-2 text-sm">
           <span className="font-semibold">Highlight words</span>
           <textarea
@@ -904,12 +1278,14 @@ export function AdminMusicImageGenerator({
               setStatus('')
             }}
             rows={4}
+            disabled={!selectedTemplate.requiresLyricLine}
             placeholder="One word per line, or separate with commas"
             className="w-full resize-y rounded-2xl border border-border bg-surface px-4 py-3 outline-none"
           />
           <span className="text-xs text-muted">
-            Defaults to the vocab card words. You can add, remove, or adjust the
-            substrings to highlight in the lyric.
+            {selectedTemplate.requiresLyricLine
+              ? 'Defaults to the vocab card words. You can add, remove, or adjust the substrings to highlight in the lyric.'
+              : 'This template does not use lyric highlights.'}
           </span>
         </label>
 
@@ -917,7 +1293,11 @@ export function AdminMusicImageGenerator({
           <button
             type="button"
             onClick={handleRender}
-            disabled={isRendering || !selectedMusic || !selectedLineId}
+            disabled={
+              isRendering ||
+              !selectedMusic ||
+              (selectedTemplate.requiresLyricLine && !selectedLineId)
+            }
             className="rounded-full bg-brand px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
             {isRendering ? 'Generating...' : 'Generate 1080 x 1080'}
@@ -940,7 +1320,7 @@ export function AdminMusicImageGenerator({
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="font-heading text-2xl font-bold">Preview</h2>
-            <p className="mt-1 text-sm text-muted">4:4 / 1080 x 1080 PNG</p>
+            <p className="mt-1 text-sm text-muted">1:1 / 1080 x 1080 PNG</p>
           </div>
         </div>
         <div className="mx-auto aspect-square w-full max-w-[432px] overflow-hidden rounded-[24px] border border-border bg-surface-strong">
@@ -948,12 +1328,12 @@ export function AdminMusicImageGenerator({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
-              alt="Generated lyric card preview"
+              alt="Generated music image preview"
               className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full items-center justify-center px-8 text-center text-sm text-muted">
-              Generate an image to preview the final lyric card.
+              Generate an image to preview the final music image.
             </div>
           )}
         </div>
