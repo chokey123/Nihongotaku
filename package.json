@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@google/genai": "^1.49.0",
+    "@remotion/bundler": "^4.0.451",
+    "@remotion/renderer": "^4.0.451",
     "@supabase/supabase-js": "^2.101.1",
     "@tiptap/extension-image": "^3.22.1",
     "@tiptap/extension-text-align": "^3.22.1",
@@ -19,7 +21,8 @@
     "kuromoji": "^0.1.2",
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "remotion": "^4.0.451"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
