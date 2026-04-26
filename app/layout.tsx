@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     '歌詞翻譯',
   ],
   applicationName: siteName,
+  verification: {
+    google: 'e8Sreb47LDg3PN5dQrzvNHh0_AtjpS-vRv4-OmJvMy0',
+  },
   openGraph: {
     type: 'website',
     siteName,
