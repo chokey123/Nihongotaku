@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { startNavigationFeedback } from '@/components/providers/navigation-feedback'
@@ -86,7 +87,20 @@ export function MusicCard({
         <p className="text-sm font-medium text-muted">{item.artist}</p>
         <div className="flex items-start justify-between gap-3">
           <h3 className="line-clamp-2 font-heading text-xl font-bold tracking-tight">
-            {item.title}
+            {disableLink ? (
+              item.title
+            ) : (
+              <Link
+                href={detailHref}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  startNavigationFeedback()
+                }}
+                className="transition hover:text-brand-strong"
+              >
+                {item.title}
+              </Link>
+            )}
           </h3>
           <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
             {item.genre}
