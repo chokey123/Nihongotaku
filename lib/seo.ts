@@ -23,7 +23,9 @@ export function getMusicUrl(locale: string, musicId: string) {
 }
 
 export function getYoutubeThumbnailUrl(youtubeId: string) {
-  return youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : ''
+  return youtubeId
+    ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+    : ''
 }
 
 export function getLocalizedText(value: LocalizedText, locale: Locale) {
@@ -42,7 +44,7 @@ export function buildMusicSeoDescription(
   ).size
   const detail = vocabCount > 0 ? `，整理 ${vocabCount} 個日語單字` : ''
 
-  return `${music.artist}「${music.title}」日語歌詞、中文翻譯與逐句學習${detail}。在 Nihongotaku 用 JPOP 學日語，收錄 ${music.genre} 歌曲歌詞與單字解析。`
+  return `${music.artist}「${music.title}」日語歌詞、中文翻譯與逐句學習${detail}。在本站用 JPOP 學日語，收錄 ${music.genre} 歌曲歌詞與單字解析。`
 }
 
 export function buildMusicKeywords(

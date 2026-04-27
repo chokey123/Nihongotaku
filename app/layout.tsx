@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: `%s | ${siteName}`,
   },
   description:
-    'Nihongotaku 收錄日語歌曲歌詞、中文翻譯、單字卡與測驗，讓你用 JPOP 輕鬆學日語。',
+    '本站收錄日語歌曲歌詞、中文翻譯、單字卡與測驗，讓你用 JPOP 輕鬆學日語。',
   keywords: [
     '日語歌詞',
     '日文歌詞',
