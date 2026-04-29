@@ -42,6 +42,10 @@ type VideoSlide =
       line: LyricLine
       lineNumber: number
     }
+  | {
+      type: 'ending'
+      durationMs: number
+    }
 
 function getLocalizedText(
   value: Partial<Record<Locale, string>>,
@@ -51,7 +55,7 @@ function getLocalizedText(
 }
 
 function getLineVocabs(item: MusicItem, lineId: string) {
-  return item.vocab.filter((entry) => entry.lineId === lineId).slice(0, 3)
+  return item.vocab.filter((entry) => entry.lineId === lineId)
 }
 
 function formatDuration(ms: number) {
@@ -170,6 +174,37 @@ function wrapText(
   return lines
 }
 
+function balanceWrappedLines(
+  ctx: CanvasRenderingContext2D,
+  lines: string[],
+  maxWidth: number,
+) {
+  const balanced = [...lines]
+
+  for (let index = balanced.length - 1; index > 0; index -= 1) {
+    let current = balanced[index]
+    let previous = balanced[index - 1]
+
+    while (previous.length - current.length > 3) {
+      const moved = previous.at(-1)
+      if (!moved) break
+
+      const nextCurrent = `${moved}${current}`
+      if (ctx.measureText(nextCurrent).width > maxWidth) {
+        break
+      }
+
+      previous = previous.slice(0, -1)
+      current = nextCurrent
+    }
+
+    balanced[index - 1] = previous
+    balanced[index] = current
+  }
+
+  return balanced
+}
+
 function drawFallbackBackground(
   ctx: CanvasRenderingContext2D,
   item: MusicItem,
@@ -263,7 +298,7 @@ function drawOpeningSlide(
   ctx.shadowBlur = 34
   ctx.shadowOffsetY = 18
   ctx.fillStyle = 'rgba(255, 255, 255, 0.70)'
-  roundRect(ctx, 70, 96, VIDEO_WIDTH - 140, 1400, 52)
+  roundRect(ctx, 70, 96, VIDEO_WIDTH - 140, 1588, 52)
   ctx.fill()
   ctx.shadowBlur = 0
   ctx.shadowOffsetY = 0
@@ -271,7 +306,7 @@ function drawOpeningSlide(
   ctx.lineWidth = 2
   ctx.stroke()
   ctx.fillStyle = 'rgba(249, 115, 22, 0.86)'
-  roundRect(ctx, 70, 96, 20, 1400, 10)
+  roundRect(ctx, 70, 96, 20, 1588, 10)
   ctx.fill()
   ctx.restore()
 
@@ -353,7 +388,7 @@ function drawLyricSlide(
   ctx.shadowBlur = 34
   ctx.shadowOffsetY = 18
   ctx.fillStyle = 'rgba(255, 255, 255, 0.72)'
-  roundRect(ctx, 70, 110, VIDEO_WIDTH - 140, 1390, 52)
+  roundRect(ctx, 70, 96, VIDEO_WIDTH - 140, 1588, 52)
   ctx.fill()
   ctx.shadowBlur = 0
   ctx.shadowOffsetY = 0
@@ -361,40 +396,52 @@ function drawLyricSlide(
   ctx.lineWidth = 2
   ctx.stroke()
   ctx.fillStyle = 'rgba(249, 115, 22, 0.86)'
-  roundRect(ctx, 70, 110, 20, 1390, 10)
+  roundRect(ctx, 70, 96, 20, 1588, 10)
   ctx.fill()
   ctx.restore()
 
   if (logo) {
-    drawContainImage(ctx, logo, 300, 168, 480, 78)
+    ctx.save()
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.78)'
+    ctx.shadowBlur = 20
+    drawContainImage(ctx, logo, 150, 108, 780, 308)
+    ctx.restore()
   }
 
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#9a3412'
-  ctx.font = '800 34px system-ui, sans-serif'
-  ctx.fillText(
-    `${slide.line.timeLabel || `Line ${slide.lineNumber}`} / ${item.artist}`,
-    VIDEO_WIDTH / 2,
-    310,
-  )
+  ctx.font = '800 44px system-ui, sans-serif'
+  ctx.fillText(slide.line.timeLabel || `Line ${slide.lineNumber}`, VIDEO_WIDTH / 2, 430)
+  ctx.fillStyle = '#7c2d12'
+  const artistSize = fitFontSize(ctx, item.artist, 760, 54, 34)
+  ctx.font = `900 ${artistSize}px system-ui, sans-serif`
+  ctx.fillText(item.artist, VIDEO_WIDTH / 2, 484)
+  ctx.fillStyle = '#7c2d12'
+  const titleSize = fitFontSize(ctx, item.title, 800, 56, 34)
+  ctx.font = `900 ${titleSize}px system-ui, sans-serif`
+  ctx.fillText(item.title, VIDEO_WIDTH / 2, 548)
 
   const lyricMaxWidth = 820
-  let lyricFontSize = 78
+  let lyricFontSize = 68
   let lyricLines: string[] = []
-  while (lyricFontSize >= 46) {
+  while (lyricFontSize >= 40) {
     ctx.font = `900 ${lyricFontSize}px system-ui, sans-serif`
-    lyricLines = wrapText(ctx, slide.line.japanese, lyricMaxWidth).slice(0, 4)
-    const lyricHeight = lyricLines.length * lyricFontSize * 1.24
-    if (lyricHeight <= 410) {
+    lyricLines = balanceWrappedLines(
+      ctx,
+      wrapText(ctx, slide.line.japanese, lyricMaxWidth).slice(0, 4),
+      lyricMaxWidth,
+    )
+    const lyricHeight = lyricLines.length * lyricFontSize * 1.2
+    if (lyricHeight <= 330) {
       break
     }
     lyricFontSize -= 2
   }
 
-  const lyricLineHeight = Math.round(lyricFontSize * 1.24)
-  const lyricTop = 500
+  const lyricLineHeight = Math.round(lyricFontSize * 1.18)
+  const lyricTop = 690
   ctx.fillStyle = '#111827'
   ctx.font = `900 ${lyricFontSize}px system-ui, sans-serif`
   lyricLines.forEach((line, index) => {
@@ -402,20 +449,38 @@ function drawLyricSlide(
   })
 
   const translation = getLocalizedText(slide.line.translation, locale)
+  let contentBottom = lyricTop + lyricLines.length * lyricLineHeight
   if (translation) {
     ctx.fillStyle = '#4b5563'
-    ctx.font = '800 42px system-ui, sans-serif'
-    const translationLines = wrapText(ctx, translation, 780).slice(0, 3)
+    ctx.font = '800 50px system-ui, sans-serif'
+    const translationLines = balanceWrappedLines(
+      ctx,
+      wrapText(ctx, translation, 780).slice(0, 3),
+      780,
+    )
     translationLines.forEach((line, index) => {
-      ctx.fillText(line, VIDEO_WIDTH / 2, 940 + index * 56)
+      ctx.fillText(line, VIDEO_WIDTH / 2, contentBottom + 30 + index * 66)
     })
+    contentBottom += 30 + translationLines.length * 66
   }
 
   const vocabs = getLineVocabs(item, slide.line.id)
   if (vocabs.length > 0) {
     ctx.textAlign = 'left'
+    const vocabTop = Math.max(contentBottom + 62, 1050)
+    const bottomBound = 1632
+    const gap = vocabs.length > 3 ? 14 : 22
+    const cardHeight = Math.max(
+      86,
+      Math.min(132, (bottomBound - vocabTop - gap * (vocabs.length - 1)) / vocabs.length),
+    )
+    const totalCardHeight = vocabs.length * cardHeight + (vocabs.length - 1) * gap
+    const startY =
+      vocabs.length <= 2
+        ? vocabTop + Math.max(0, (bottomBound - vocabTop - totalCardHeight) / 2)
+        : vocabTop
     vocabs.forEach((vocab, index) => {
-      drawVideoVocabChip(ctx, vocab, 190, 1162 + index * 92, 700)
+      drawVideoVocabChip(ctx, vocab, 170, startY + index * (cardHeight + gap), 740, cardHeight)
     })
   }
 
@@ -429,24 +494,104 @@ function drawVideoVocabChip(
   x: number,
   y: number,
   width: number,
+  height = 68,
 ) {
   ctx.save()
   ctx.fillStyle = 'rgba(255, 247, 237, 0.86)'
-  roundRect(ctx, x, y, width, 68, 34)
+  roundRect(ctx, x, y, width, height, 30)
   ctx.fill()
   ctx.strokeStyle = 'rgba(249, 115, 22, 0.28)'
   ctx.lineWidth = 2
   ctx.stroke()
   ctx.fillStyle = '#7c2d12'
-  ctx.font = '900 32px system-ui, sans-serif'
-  ctx.fillText(vocab.word, x + 34, y + 19)
+  ctx.font = '900 40px system-ui, sans-serif'
+  ctx.fillText(vocab.word, x + 34, y + 20)
+  if (vocab.furigana) {
+    ctx.fillStyle = '#9a3412'
+    ctx.font = '700 24px system-ui, sans-serif'
+    ctx.fillText(vocab.furigana, x + 34, y + height - 36)
+  }
   const meaning = getLocalizedText(vocab.meaning, 'zh')
   if (meaning) {
     ctx.fillStyle = '#4b5563'
-    ctx.font = '700 26px system-ui, sans-serif'
-    ctx.fillText(meaning, x + 250, y + 22)
+    ctx.font = '800 30px system-ui, sans-serif'
+    const meaningLines = wrapText(ctx, meaning, width - 310).slice(0, 2)
+    meaningLines.forEach((line, index) => {
+      ctx.fillText(line, x + 286, y + 22 + index * 38)
+    })
   }
   ctx.restore()
+}
+
+function drawEndingSlide(
+  ctx: CanvasRenderingContext2D,
+  item: MusicItem,
+  backgroundImage?: HTMLImageElement,
+  logo?: HTMLImageElement,
+  mobileLogo?: HTMLImageElement,
+) {
+  drawBackground(ctx, item, backgroundImage)
+
+  ctx.save()
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.24)'
+  ctx.shadowBlur = 34
+  ctx.shadowOffsetY = 18
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)'
+  roundRect(ctx, 70, 96, VIDEO_WIDTH - 140, 1588, 52)
+  ctx.fill()
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.46)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(249, 115, 22, 0.86)'
+  roundRect(ctx, 70, 96, 20, 1588, 10)
+  ctx.fill()
+  ctx.restore()
+
+  if (logo) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.78)'
+    ctx.shadowBlur = 20
+    drawContainImage(ctx, logo, 140, 112, 800, 300)
+    ctx.restore()
+  } else {
+    ctx.save()
+    ctx.strokeStyle = '#40523f'
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.arc(VIDEO_WIDTH / 2, 148, 54, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.fillStyle = '#40523f'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = '900 42px system-ui, sans-serif'
+    ctx.fillText('日文', VIDEO_WIDTH / 2, 148)
+    ctx.restore()
+  }
+
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = '#3a1f0d'
+  ctx.shadowColor = 'rgba(80, 42, 16, 0.14)'
+  ctx.shadowBlur = 8
+  ctx.font = '900 82px system-ui, sans-serif'
+  ctx.fillText('もっと学びたい？', VIDEO_WIDTH / 2, 650)
+  ctx.font = '900 106px system-ui, sans-serif'
+  ctx.fillText('フォローしてね！', VIDEO_WIDTH / 2, 792)
+  ctx.font = '900 62px system-ui, sans-serif'
+  ctx.fillText('關注我觀看更多內容！', VIDEO_WIDTH / 2, 980)
+  ctx.restore()
+
+  if (mobileLogo) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(15, 23, 42, 0.18)'
+    ctx.shadowBlur = 24
+    ctx.shadowOffsetY = 10
+    drawContainImage(ctx, mobileLogo, 330, 1138, 420, 300)
+    ctx.restore()
+  }
 }
 
 function drawSlide(
@@ -457,9 +602,15 @@ function drawSlide(
   sectionLabel: string,
   backgroundImage?: HTMLImageElement,
   logo?: HTMLImageElement,
+  mobileLogo?: HTMLImageElement,
 ) {
   if (slide.type === 'opening') {
     drawOpeningSlide(ctx, item, sectionLabel, backgroundImage, logo)
+    return
+  }
+
+  if (slide.type === 'ending') {
+    drawEndingSlide(ctx, item, backgroundImage, logo, mobileLogo)
     return
   }
 
@@ -472,6 +623,7 @@ function buildSlides(
   endIndex: number,
   openingDurationMs: number,
   fallbackLastDurationMs: number,
+  endingDurationMs: number,
 ) {
   const slides: VideoSlide[] = [{ type: 'opening', durationMs: openingDurationMs }]
   const selectedLines = lines.slice(startIndex, endIndex + 1)
@@ -490,6 +642,8 @@ function buildSlides(
       lineNumber: absoluteIndex + 1,
     })
   })
+
+  slides.push({ type: 'ending', durationMs: endingDurationMs })
 
   return slides
 }
@@ -528,9 +682,10 @@ async function renderVideo({
   }
 
   const backgroundUrl = getBackgroundUrl(item, backgroundImageUrl)
-  const [backgroundImage, logo] = await Promise.all([
+  const [backgroundImage, logo, mobileLogo] = await Promise.all([
     backgroundUrl ? loadImage(backgroundUrl).catch(() => undefined) : undefined,
     loadImage('/api/brand-logo?variant=text').catch(() => undefined),
+    loadImage('/api/brand-logo').catch(() => undefined),
   ])
 
   const mimeType = getSupportedMimeType()
@@ -600,6 +755,7 @@ async function renderVideo({
         sectionLabel,
         backgroundImage,
         logo,
+        mobileLogo,
       )
       onProgress(totalDurationMs === 0 ? 1 : elapsedMs / totalDurationMs)
 
@@ -651,6 +807,7 @@ export function AdminMusicVideoGenerator({
     MUSIC_SECTION_LABELS[3]?.label ?? '',
   )
   const [openingDurationMs, setOpeningDurationMs] = useState(2500)
+  const [endingDurationMs, setEndingDurationMs] = useState(3000)
   const [fallbackLastDurationMs, setFallbackLastDurationMs] = useState(4000)
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('')
   const [status, setStatus] = useState('')
@@ -673,6 +830,7 @@ export function AdminMusicVideoGenerator({
         endIndex,
         openingDurationMs,
         fallbackLastDurationMs,
+        endingDurationMs,
       )
     : []
   const totalDurationMs = selectedSlides.reduce(
@@ -884,7 +1042,7 @@ export function AdminMusicVideoGenerator({
           />
         </label>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <label className="block space-y-2 text-sm">
             <span className="font-semibold">Opening duration</span>
             <input
@@ -895,6 +1053,23 @@ export function AdminMusicVideoGenerator({
               value={openingDurationMs / 1000}
               onChange={(event) => {
                 setOpeningDurationMs(Number(event.target.value) * 1000)
+                setVideoUrl('')
+                setStatus('')
+              }}
+              className="w-full rounded-2xl border border-border bg-surface px-4 py-3 outline-none"
+            />
+          </label>
+
+          <label className="block space-y-2 text-sm">
+            <span className="font-semibold">Ending duration</span>
+            <input
+              type="number"
+              min={1}
+              max={8}
+              step={0.5}
+              value={endingDurationMs / 1000}
+              onChange={(event) => {
+                setEndingDurationMs(Number(event.target.value) * 1000)
                 setVideoUrl('')
                 setStatus('')
               }}

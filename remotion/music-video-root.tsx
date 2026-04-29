@@ -34,6 +34,7 @@ const defaultProps: MusicVideoRenderProps = {
   sectionLabel: 'サビ / 副歌',
   backgroundImageUrl: '',
   logoUrl: '',
+  mobileLogoUrl: '',
 }
 
 function MusicVideoCompositionWrapper(props: Record<string, unknown>) {

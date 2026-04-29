@@ -16,6 +16,10 @@ export type MusicVideoSlide =
       line: LyricLine
       lineNumber: number
     }
+  | {
+      type: 'ending'
+      durationMs: number
+    }
 
 export interface MusicVideoRenderProps {
   item: MusicItem
@@ -24,6 +28,7 @@ export interface MusicVideoRenderProps {
   sectionLabel: string
   backgroundImageUrl: string
   logoUrl: string
+  mobileLogoUrl: string
 }
 
 export function msToFrames(ms: number) {

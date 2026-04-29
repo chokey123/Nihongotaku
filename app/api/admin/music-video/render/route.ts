@@ -34,6 +34,7 @@ function getAbsoluteAssetUrls(request: Request, item: MusicItem, backgroundImage
         ? `${origin}/api/youtube-thumbnail?videoId=${encodeURIComponent(item.youtubeId)}`
         : '',
     logoUrl: `${origin}/api/brand-logo?variant=text`,
+    mobileLogoUrl: `${origin}/api/brand-logo`,
   }
 }
 
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
       sectionLabel: body.sectionLabel,
       backgroundImageUrl: assets.backgroundImageUrl,
       logoUrl: assets.logoUrl,
+      mobileLogoUrl: assets.mobileLogoUrl,
     }
     const remotionInputProps = inputProps as unknown as Record<string, unknown>
 

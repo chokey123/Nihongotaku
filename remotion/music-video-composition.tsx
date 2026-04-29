@@ -21,7 +21,7 @@ function getLocalizedText(
 }
 
 function getLineVocabs(item: MusicItem, lineId: string) {
-  return item.vocab.filter((entry) => entry.lineId === lineId).slice(0, 3)
+  return item.vocab.filter((entry) => entry.lineId === lineId)
 }
 
 function VideoBackground({
@@ -61,7 +61,7 @@ function VideoBackground({
   )
 }
 
-function MainCard({ height = 1400, top = 96 }: { height?: number; top?: number }) {
+function MainCard({ height = 1588, top = 96 }: { height?: number; top?: number }) {
   return (
     <div
       style={{
@@ -136,6 +136,117 @@ function Footer() {
         </div>
       </div>
     </div>
+  )
+}
+
+function EndingSlide({
+  item,
+  backgroundImageUrl,
+  logoUrl,
+  mobileLogoUrl,
+}: {
+  item: MusicItem
+  backgroundImageUrl: string
+  logoUrl: string
+  mobileLogoUrl: string
+}) {
+  return (
+    <AbsoluteFill style={{ fontFamily }}>
+      <VideoBackground item={item} backgroundImageUrl={backgroundImageUrl} />
+      <MainCard top={96} height={1588} />
+      {logoUrl ? (
+        <Img
+          src={logoUrl}
+          style={{
+            position: 'absolute',
+            left: 140,
+            top: 112,
+            width: 800,
+            height: 300,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 0 20px rgba(255,255,255,0.78))',
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            position: 'absolute',
+            left: 486,
+            top: 176,
+            width: 108,
+            height: 108,
+            borderRadius: 999,
+            border: '4px solid #40523f',
+            color: '#40523f',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 42,
+            fontWeight: 900,
+          }}
+        >
+          日文
+        </div>
+      )}
+      <div
+        style={{
+          position: 'absolute',
+          top: 650,
+          width: '100%',
+          textAlign: 'center',
+          color: '#3a1f0d',
+          fontSize: 82,
+          fontWeight: 900,
+          lineHeight: 1,
+          textShadow: '0 0 8px rgba(80,42,16,0.14)',
+        }}
+      >
+        もっと学びたい？
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: 792,
+          width: '100%',
+          textAlign: 'center',
+          color: '#3a1f0d',
+          fontSize: 106,
+          fontWeight: 900,
+          lineHeight: 1,
+          textShadow: '0 0 8px rgba(80,42,16,0.14)',
+        }}
+      >
+        フォローしてね！
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: 980,
+          width: '100%',
+          textAlign: 'center',
+          color: '#3a1f0d',
+          fontSize: 62,
+          fontWeight: 900,
+          lineHeight: 1,
+        }}
+      >
+        關注我觀看更多內容！
+      </div>
+      {mobileLogoUrl ? (
+        <Img
+          src={mobileLogoUrl}
+          style={{
+            position: 'absolute',
+            left: 330,
+            top: 1138,
+            width: 420,
+            height: 300,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 10px 24px rgba(15,23,42,0.18))',
+          }}
+        />
+      ) : null}
+    </AbsoluteFill>
   )
 }
 
@@ -270,42 +381,61 @@ function OpeningSlide({
   )
 }
 
-function VocabChip({ vocab }: { vocab: MusicVocabItem }) {
+function VocabChip({
+  vocab,
+  height,
+}: {
+  vocab: MusicVocabItem
+  height: number
+}) {
   return (
     <div
       style={{
-        height: 68,
-        borderRadius: 34,
+        minHeight: height,
+        borderRadius: 30,
         background: 'rgba(255,247,237,0.86)',
         border: '2px solid rgba(249,115,22,0.28)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 34px',
-        gap: 42,
+        padding: '14px 34px',
+        gap: 34,
       }}
     >
-      <span
+      <div
         style={{
-          minWidth: 175,
+          width: 220,
           color: '#7c2d12',
-          fontSize: 32,
-          fontWeight: 900,
+          flexShrink: 0,
         }}
       >
-        {vocab.word}
-      </span>
-      <span
+        <div style={{ fontSize: 40, fontWeight: 900, lineHeight: 1.05 }}>
+          {vocab.word}
+        </div>
+        {vocab.furigana ? (
+          <div
+            style={{
+              marginTop: 8,
+              color: '#9a3412',
+              fontSize: 24,
+              fontWeight: 700,
+              lineHeight: 1.05,
+            }}
+          >
+            {vocab.furigana}
+          </div>
+        ) : null}
+      </div>
+      <div
         style={{
           color: '#4b5563',
-          fontSize: 26,
-          fontWeight: 700,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          fontSize: 30,
+          fontWeight: 800,
+          lineHeight: 1.22,
+          flex: 1,
         }}
       >
         {getLocalizedText(vocab.meaning, 'zh')}
-      </span>
+      </div>
     </div>
   )
 }
@@ -325,51 +455,105 @@ function LyricSlide({
 }) {
   const vocabs = getLineVocabs(item, slide.line.id)
   const translation = getLocalizedText(slide.line.translation, locale)
-  const lyricFontSize = fitText(slide.line.japanese, 14, 78, 48)
-  const lyricLines = splitText(slide.line.japanese, 12).slice(0, 4)
-  const translationLines = splitText(translation, 18).slice(0, 3)
+  const lyricFontSize = fitText(slide.line.japanese, 16, 68, 40)
+  const lyricLines = splitBalancedText(slide.line.japanese, 4, 13)
+  const translationLines = splitBalancedText(translation, 3, 16)
+  const lyricTop = 690
+  const lyricLineHeight = Math.round(lyricFontSize * 1.18)
+  const translationTop = lyricTop + lyricLines.length * lyricLineHeight + 30
+  const translationLineHeight = 66
+  const translationBottom =
+    translationTop +
+    (translationLines.length > 0 ? translationLines.length * translationLineHeight : 0)
+  const vocabTop = Math.max(translationBottom + 62, 1050)
+  const vocabBottom = 1632
+  const vocabGap = vocabs.length > 3 ? 14 : 22
+  const vocabCardHeight =
+    vocabs.length > 0
+      ? Math.max(
+          86,
+          Math.min(
+            132,
+            (vocabBottom - vocabTop - vocabGap * (vocabs.length - 1)) /
+              vocabs.length,
+          ),
+        )
+      : 0
+  const vocabTotalHeight =
+    vocabs.length * vocabCardHeight + Math.max(0, vocabs.length - 1) * vocabGap
+  const vocabStartTop =
+    vocabs.length <= 2
+      ? vocabTop + Math.max(0, (vocabBottom - vocabTop - vocabTotalHeight) / 2)
+      : vocabTop
 
   return (
     <AbsoluteFill style={{ fontFamily }}>
       <VideoBackground item={item} backgroundImageUrl={backgroundImageUrl} />
-      <MainCard top={110} height={1390} />
+      <MainCard top={96} height={1588} />
       {logoUrl ? (
         <Img
           src={logoUrl}
           style={{
             position: 'absolute',
-            left: 300,
-            top: 168,
-            width: 480,
-            height: 78,
+            left: 150,
+            top: 108,
+            width: 780,
+            height: 308,
             objectFit: 'contain',
+            filter: 'drop-shadow(0 0 20px rgba(255,255,255,0.78))',
           }}
         />
       ) : null}
       <div
         style={{
           position: 'absolute',
-          top: 310,
+          top: 430,
           width: '100%',
           textAlign: 'center',
           color: '#9a3412',
-          fontSize: 34,
+          fontSize: 44,
           fontWeight: 800,
         }}
       >
-        {slide.line.timeLabel || `Line ${slide.lineNumber}`} / {item.artist}
+        {slide.line.timeLabel || `Line ${slide.lineNumber}`}
       </div>
       <div
         style={{
           position: 'absolute',
-          top: 500,
+          top: 484,
+          width: '100%',
+          textAlign: 'center',
+          color: '#7c2d12',
+          fontSize: fitText(item.artist, 20, 54, 34),
+          fontWeight: 900,
+        }}
+      >
+        {item.artist}
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: 548,
+          width: '100%',
+          textAlign: 'center',
+          color: '#7c2d12',
+          fontSize: fitText(item.title, 22, 56, 34),
+          fontWeight: 900,
+        }}
+      >
+        {item.title}
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: lyricTop,
           left: 130,
           width: 820,
           textAlign: 'center',
           color: '#111827',
           fontSize: lyricFontSize,
           fontWeight: 900,
-          lineHeight: 1.24,
+          lineHeight: 1.18,
         }}
       >
         {lyricLines.map((line) => (
@@ -380,14 +564,14 @@ function LyricSlide({
         <div
           style={{
             position: 'absolute',
-            top: 940,
+            top: translationTop,
             left: 150,
             width: 780,
             textAlign: 'center',
             color: '#4b5563',
-            fontSize: 42,
+            fontSize: 50,
             fontWeight: 800,
-            lineHeight: 1.34,
+            lineHeight: `${translationLineHeight}px`,
           }}
         >
           {translationLines.map((line) => (
@@ -399,16 +583,16 @@ function LyricSlide({
         <div
           style={{
             position: 'absolute',
-            left: 190,
-            top: 1162,
-            width: 700,
+            left: 170,
+            top: vocabStartTop,
+            width: 740,
             display: 'flex',
             flexDirection: 'column',
-            gap: 24,
+            gap: vocabGap,
           }}
         >
           {vocabs.map((vocab) => (
-            <VocabChip key={vocab.id} vocab={vocab} />
+            <VocabChip key={vocab.id} vocab={vocab} height={vocabCardHeight} />
           ))}
         </div>
       ) : null}
@@ -417,17 +601,22 @@ function LyricSlide({
   )
 }
 
-function splitText(text: string, maxChars: number) {
-  if (!text) {
+function splitBalancedText(text: string, maxLines: number, targetChars: number) {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
     return []
   }
 
-  const chars = [...text]
+  const chars = [...normalized]
+  const lineCount = Math.min(maxLines, Math.ceil(chars.length / targetChars))
+  const charsPerLine = Math.ceil(chars.length / lineCount)
   const lines: string[] = []
-  for (let index = 0; index < chars.length; index += maxChars) {
-    lines.push(chars.slice(index, index + maxChars).join(''))
+
+  for (let index = 0; index < chars.length; index += charsPerLine) {
+    lines.push(chars.slice(index, index + charsPerLine).join(''))
   }
-  return lines
+
+  return lines.slice(0, maxLines)
 }
 
 export function MusicVideoComposition({
@@ -437,6 +626,7 @@ export function MusicVideoComposition({
   sectionLabel,
   backgroundImageUrl,
   logoUrl,
+  mobileLogoUrl,
 }: MusicVideoRenderProps) {
   const frame = useCurrentFrame()
   let cursor = 0
@@ -458,6 +648,17 @@ export function MusicVideoComposition({
         sectionLabel={sectionLabel}
         backgroundImageUrl={backgroundImageUrl}
         logoUrl={logoUrl}
+      />
+    )
+  }
+
+  if (currentSlide.type === 'ending') {
+    return (
+      <EndingSlide
+        item={item}
+        backgroundImageUrl={backgroundImageUrl}
+        logoUrl={logoUrl}
+        mobileLogoUrl={mobileLogoUrl}
       />
     )
   }
@@ -484,6 +685,7 @@ export function MusicVideoSequences({
   sectionLabel,
   backgroundImageUrl,
   logoUrl,
+  mobileLogoUrl,
 }: MusicVideoRenderProps) {
   const timedSlides = slides.reduce<
     Array<{ slide: MusicVideoSlide; from: number; duration: number }>
@@ -512,6 +714,13 @@ export function MusicVideoSequences({
                 sectionLabel={sectionLabel}
                 backgroundImageUrl={backgroundImageUrl}
                 logoUrl={logoUrl}
+              />
+            ) : slide.type === 'ending' ? (
+              <EndingSlide
+                item={item}
+                backgroundImageUrl={backgroundImageUrl}
+                logoUrl={logoUrl}
+                mobileLogoUrl={mobileLogoUrl}
               />
             ) : (
               <LyricSlide
