@@ -1,6 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type UIEvent,
+} from 'react'
 import Link from 'next/link'
 
 import type { Dictionary } from '@/lib/i18n'
@@ -130,10 +137,14 @@ function useYoutubePlayer(videoId: string) {
     const mountPlayer = () => {
       if (!window.YT?.Player) return
 
+      const playerHeight = window.matchMedia('(min-width: 1024px)').matches
+        ? '680'
+        : '480'
+
       stopPolling()
       playerRef.current?.destroy()
       playerRef.current = new window.YT.Player('music-player-frame', {
-        height: '480',
+        height: playerHeight,
         width: '1080',
         videoId,
         playerVars: {
@@ -704,12 +715,17 @@ export function MusicDetailClient({
         ])
 
         const nextRecommendedMusic = [
-          ...sameGenrePage.items.filter((entry) => !excludedMusicIds.has(entry.id)),
-          ...latestPage.items.filter((entry) => !excludedMusicIds.has(entry.id)),
+          ...sameGenrePage.items.filter(
+            (entry) => !excludedMusicIds.has(entry.id),
+          ),
+          ...latestPage.items.filter(
+            (entry) => !excludedMusicIds.has(entry.id),
+          ),
         ]
           .filter(
             (entry, index, array) =>
-              array.findIndex((candidate) => candidate.id === entry.id) === index,
+              array.findIndex((candidate) => candidate.id === entry.id) ===
+              index,
           )
           .slice(0, RECOMMENDED_MUSIC_LIMIT)
 
@@ -732,7 +748,13 @@ export function MusicDetailClient({
     return () => {
       cancelled = true
     }
-  }, [hasLoadedRelatedMusic, item.artist, item.genre, item.id, shouldLoadRelatedMusic])
+  }, [
+    hasLoadedRelatedMusic,
+    item.artist,
+    item.genre,
+    item.id,
+    shouldLoadRelatedMusic,
+  ])
 
   useEffect(() => {
     const shell = playerShellRef.current
@@ -1006,18 +1028,18 @@ export function MusicDetailClient({
                       }}
                       aria-label={`${isSelectedForReview ? 'Remove' : 'Add'} ${vocab.word} ${isSelectedForReview ? 'from' : 'to'} vocab review`}
                       title="點一下加入單詞回顧"
-                      className={`pointer-events-auto relative w-full rounded-[12px] border border-white/15 border-l-2 border-l-brand py-1.5 pl-2.5 pr-7 text-left shadow-[0_6px_22px_rgba(0,0,0,0.14)] backdrop-blur-[2px] transition hover:-translate-y-0.5 hover:border-brand/70 hover:bg-neutral-900/38 focus:outline-none focus:ring-2 focus:ring-brand/70 ${
+                      className={`pointer-events-auto relative w-full rounded-[12px] border border-white/15 border-l-2 border-l-brand py-1.5 pl-2.5 pr-8 text-left shadow-[0_6px_22px_rgba(0,0,0,0.14)] backdrop-blur-[2px] transition hover:-translate-y-0.5 hover:border-brand/70 hover:bg-neutral-900/38 focus:outline-none focus:ring-2 focus:ring-brand/70 lg:pr-10 ${
                         isSelectedForReview
                           ? 'bg-neutral-950/45 ring-1 ring-brand/60'
                           : 'bg-neutral-900/20'
                       }`}
                     >
-                      <span className="absolute right-1.5 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand/90 text-white shadow-sm transition hover:bg-brand">
+                      <span className="absolute right-2 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand/90 text-white shadow-sm transition hover:bg-brand lg:right-2.5 lg:h-6 lg:w-6">
                         {isSelectedForReview ? (
                           <svg
                             aria-hidden="true"
                             viewBox="0 0 24 24"
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 lg:h-4 lg:w-4"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="3"
@@ -1030,7 +1052,7 @@ export function MusicDetailClient({
                           <svg
                             aria-hidden="true"
                             viewBox="0 0 24 24"
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 lg:h-4 lg:w-4"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="3"
@@ -1046,15 +1068,15 @@ export function MusicDetailClient({
                         <span>{isSelectedForReview ? '已加入' : '點選'}</span>
                       ) : null}
                       {vocab.furigana ? (
-                        <p className="break-words text-[10px] font-semibold leading-tight text-white/82 [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-[11px]">
+                        <p className="break-words text-[10px] font-semibold leading-tight text-white/82 [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-[11px] lg:text-xs">
                           {vocab.furigana}
                         </p>
                       ) : null}
-                      <p className="break-words font-heading text-sm font-bold leading-tight text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.72)] sm:text-base">
+                      <p className="break-words font-heading text-sm font-bold leading-tight text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.72)] sm:text-base lg:text-lg">
                         {vocab.word}
                       </p>
                       {overlayMeaning ? (
-                        <p className="mt-0.5 break-words text-[11px] font-bold leading-snug text-brand [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] sm:text-xs">
+                        <p className="mt-0.5 break-words text-[11px] font-bold leading-snug text-brand [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] sm:text-xs lg:text-sm">
                           {overlayMeaning}
                         </p>
                       ) : null}
@@ -1071,12 +1093,12 @@ export function MusicDetailClient({
                     : 'bottom-[7%] sm:bottom-[6%]'
                 }`}
               >
-                <div className="max-w-[92%] rounded-[14px] border border-white/10 border-l-2 border-l-brand bg-black/28 px-4 py-2.5 text-center backdrop-blur-[2px]">
-                  <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
+                <div className="max-w-[92%] rounded-[14px] border border-white/10 border-l-2 border-l-brand bg-black/28 px-4 py-2.5 text-center backdrop-blur-[2px] lg:px-5 lg:py-3">
+                  <p className="text-base font-semibold leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl lg:text-2xl">
                     {activeLine.japanese}
                   </p>
                   {getLocalizedText(activeLine.translation, locale) ? (
-                    <p className="mt-1 text-base leading-snug text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl">
+                    <p className="mt-1 text-base leading-snug text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.8)] sm:text-xl lg:text-2xl">
                       {getLocalizedText(activeLine.translation, locale)}
                     </p>
                   ) : null}
@@ -1476,7 +1498,11 @@ export function MusicDetailClient({
           </section>
         ) : null}
       </div>
-      <div ref={relatedMusicTriggerRef} className="h-px w-full" aria-hidden="true" />
+      <div
+        ref={relatedMusicTriggerRef}
+        className="h-px w-full"
+        aria-hidden="true"
+      />
       <MusicRail
         eyebrow={sameArtistCopy[locale].eyebrow}
         title={sameArtistCopy[locale].title(item.artist)}
@@ -1503,7 +1529,7 @@ export function MusicDetailClient({
             ? 'No recommendations available yet.'
             : locale === 'ja'
               ? 'おすすめの楽曲はまだありません。'
-            : '暫時沒有推薦歌曲。'
+              : '暫時沒有推薦歌曲。'
         }
       />
       {hasLoadedRelatedMusic ? (
