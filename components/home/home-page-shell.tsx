@@ -8,6 +8,7 @@ import {
   AutocompleteInput,
   type AutocompleteOption,
 } from '@/components/ui/autocomplete-input'
+import { SocialLinks } from '@/components/layout/site-footer'
 import { SectionHeading } from '@/components/ui/section-heading'
 import type { MusicFilterOption, MusicItem, MusicSearchPage } from '@/lib/types'
 
@@ -427,6 +428,12 @@ export function HomePageShell({
             {dict.slogan}
           </h1>
           <p className="max-w-2xl text-lg text-muted">{dict.pages.homeIntro}</p>
+          <div className="space-y-3 pt-2">
+            <p className="text-sm font-semibold text-foreground">
+              關注我們的社群平臺，獲取最新消息
+            </p>
+            <SocialLinks />
+          </div>
         </div>
       </section>
 
