@@ -43,13 +43,16 @@ export function SiteHeader({
     const handleScroll = () => {
       const nextScrollY = window.scrollY
       const previousScrollY = lastScrollYRef.current
+      const keepHeaderHidden = Boolean(
+        document.querySelector('[data-sticky-youtube-reader]'),
+      )
 
       if (nextScrollY <= 12) {
         setIsVisible(true)
       } else if (nextScrollY > previousScrollY) {
         setIsVisible(false)
         setIsMobileMenuOpen(false)
-      } else if (nextScrollY < previousScrollY) {
+      } else if (nextScrollY < previousScrollY && !keepHeaderHidden) {
         setIsVisible(true)
       }
 
