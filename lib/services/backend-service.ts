@@ -151,6 +151,7 @@ interface SupabaseArticleRow {
   type: string
   artist: string | null
   thumbnail_url: string | null
+  youtube_video_id: string | null
   content_json: Record<string, unknown> | null
   is_published: boolean | null
 }
@@ -495,6 +496,7 @@ function buildArticleItemFromSupabase(row: SupabaseArticleRow): ArticleItem {
     createdBy: row.created_by ?? undefined,
     excerpt: buildExcerptFromContent(row.content_json),
     thumbnailUrl: row.thumbnail_url ?? '',
+    youtubeVideoId: row.youtube_video_id ?? '',
     isPublished: row.is_published ?? true,
     palette: buildMusicPalette(`${row.id}-${row.title}-${row.type}`),
     content: row.content_json ?? {
@@ -917,7 +919,7 @@ export class BackendService {
     let query = supabase
       .from('article')
       .select(
-        'id, created_by, title, type, artist, thumbnail_url, content_json, is_published',
+        'id, created_by, title, type, artist, thumbnail_url, youtube_video_id, content_json, is_published',
       )
       .order('created_at', { ascending: false })
 
@@ -943,7 +945,7 @@ export class BackendService {
     let query = supabase
       .from('article')
       .select(
-        'id, created_by, title, type, artist, thumbnail_url, content_json, is_published',
+        'id, created_by, title, type, artist, thumbnail_url, youtube_video_id, content_json, is_published',
       )
       .eq('id', id)
 
@@ -1930,7 +1932,7 @@ export class BackendService {
     let query = supabase
       .from('article')
       .select(
-        'id, created_by, title, type, artist, thumbnail_url, content_json, is_published',
+        'id, created_by, title, type, artist, thumbnail_url, youtube_video_id, content_json, is_published',
       )
       .order('created_at', { ascending: false })
 
@@ -2225,6 +2227,7 @@ export class BackendService {
         type: payload.type,
         artist: payload.artist,
         thumbnail_url: payload.thumbnailUrl,
+        youtube_video_id: payload.youtubeVideoId || null,
         content_json: payload.content,
         is_published: options?.isPublished ?? false,
         created_by: actorId,
@@ -2266,6 +2269,7 @@ export class BackendService {
           type: payload.type,
           artist: payload.artist,
           thumbnail_url: payload.thumbnailUrl,
+          youtube_video_id: payload.youtubeVideoId || null,
           content_json: payload.content,
           is_published: options?.isPublished ?? false,
           updated_by: actorId,

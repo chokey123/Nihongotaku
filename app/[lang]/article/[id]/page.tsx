@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ReadonlyEditor } from "@/components/article/readonly-editor";
+import { ArticleYouTubeReader } from "@/components/article/article-youtube-reader";
 import { backendService } from "@/lib/services/backend-service";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,24 @@ export default async function ArticleDetailPage({
   const article = await backendService.getArticleById(id);
   const contentLabel =
     lang === "en" ? "Content" : lang === "ja" ? "内容" : "內容";
+  const readerLabels =
+    lang === "en"
+      ? {
+          videoTitle: "YouTube music video",
+          timestampHint: "Select a timestamp in the article to jump to that moment in the video.",
+          nowPlaying: "Jumped to",
+        }
+      : lang === "ja"
+        ? {
+            videoTitle: "YouTube ミュージックビデオ",
+            timestampHint: "記事内の時刻を選ぶと、動画のその位置から再生します。",
+            nowPlaying: "再生位置",
+          }
+        : {
+            videoTitle: "YouTube 音樂影片",
+            timestampHint: "點擊文章中的時間碼，即可跳到影片的對應位置播放。",
+            nowPlaying: "已跳至",
+          };
 
   if (!article) notFound();
 
@@ -56,7 +75,16 @@ export default async function ArticleDetailPage({
           <h2 className="font-heading text-2xl font-bold">{contentLabel}</h2>
           <span className="text-sm text-muted">{article.artist}</span>
         </div>
-        <ReadonlyEditor content={article.content} />
+        {article.youtubeVideoId ? (
+          <ArticleYouTubeReader
+            content={article.content}
+            title={article.title}
+            videoId={article.youtubeVideoId}
+            labels={readerLabels}
+          />
+        ) : (
+          <ReadonlyEditor content={article.content} />
+        )}
       </section>
     </article>
   );

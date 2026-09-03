@@ -7,6 +7,7 @@ import { ArticleEditor } from "@/components/article/article-editor";
 import { backendService } from "@/lib/services/backend-service";
 import type { Dictionary } from "@/lib/i18n";
 import type { ArticleItem } from "@/lib/types";
+import { extractYouTubeVideoId } from "@/lib/youtube";
 
 const emptyDoc: Record<string, unknown> = {
   type: "doc",
@@ -35,6 +36,9 @@ function getArticleActionLabels(locale: string) {
       publishedState: "Published",
       draftState: "Draft",
       saveFailed: "Save failed",
+      youtubeLabel: "YouTube MV URL",
+      youtubeHint: "Paste a YouTube URL. Timestamps such as 0:25 in the article become clickable after publishing.",
+      youtubeInvalid: "Please enter a valid YouTube video URL or video ID.",
     };
   }
 
@@ -48,6 +52,9 @@ function getArticleActionLabels(locale: string) {
       publishedState: "公開中",
       draftState: "下書き",
       saveFailed: "保存に失敗しました",
+      youtubeLabel: "YouTube MV URL",
+      youtubeHint: "YouTube URLを貼り付けると、記事内の0:25などの時刻から再生位置へ移動できます。",
+      youtubeInvalid: "有効なYouTube動画URLまたは動画IDを入力してください。",
     };
   }
 
@@ -60,6 +67,9 @@ function getArticleActionLabels(locale: string) {
     publishedState: "已發布",
     draftState: "草稿",
     saveFailed: "保存失敗",
+    youtubeLabel: "YouTube MV 網址",
+    youtubeHint: "貼上 YouTube 網址後，文章中的 0:25 等時間碼會在發佈頁自動變成可點擊連結。",
+    youtubeInvalid: "請輸入有效的 YouTube 影片網址或影片 ID。",
   };
 }
 
@@ -86,6 +96,11 @@ export function AdminArticleForm({
   const [type, setType] = useState(initialArticle?.type ?? "");
   const [artist, setArtist] = useState(initialArticle?.artist ?? "");
   const [thumbnailUrl, setThumbnailUrl] = useState(initialArticle?.thumbnailUrl ?? "");
+  const [youtubeUrl, setYoutubeUrl] = useState(
+    initialArticle?.youtubeVideoId
+      ? `https://www.youtube.com/watch?v=${initialArticle.youtubeVideoId}`
+      : "",
+  );
   const [content, setContent] = useState<Record<string, unknown>>(initialArticle?.content ?? emptyDoc);
   const [isPublished, setIsPublished] = useState(initialArticle?.isPublished ?? false);
   const thumbnailPreviewUrl = isValidHttpUrl(thumbnailUrl) ? thumbnailUrl : "";
@@ -99,7 +114,15 @@ export function AdminArticleForm({
 
     startTransition(async () => {
       try {
-        const payload = { title, type, artist, thumbnailUrl, content };
+        const parsedYouTubeVideoId = youtubeUrl.trim()
+          ? extractYouTubeVideoId(youtubeUrl)
+          : "";
+        if (youtubeUrl.trim() && !parsedYouTubeVideoId) {
+          setStatus(actionLabels.youtubeInvalid);
+          return;
+        }
+        const youtubeVideoId = parsedYouTubeVideoId ?? "";
+        const payload = { title, type, artist, thumbnailUrl, youtubeVideoId, content };
         const response =
           mode === "create"
             ? await backendService.createArticle(payload, {
@@ -196,6 +219,19 @@ export function AdminArticleForm({
             placeholder="https://..."
             className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
           />
+        </label>
+        <label className="space-y-2 text-sm md:col-span-2">
+          <span>{actionLabels.youtubeLabel}</span>
+          <input
+            type="url"
+            value={youtubeUrl}
+            onChange={(event) => setYoutubeUrl(event.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3 outline-none"
+          />
+          <span className="block text-xs leading-5 text-muted">
+            {actionLabels.youtubeHint}
+          </span>
         </label>
       </div>
       <div className="mt-5 space-y-3">

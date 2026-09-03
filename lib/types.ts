@@ -119,6 +119,7 @@ export interface ArticleItem {
   createdBy?: string;
   excerpt: string;
   thumbnailUrl: string;
+  youtubeVideoId?: string;
   isPublished?: boolean;
   palette: {
     from: string;
@@ -160,6 +161,7 @@ export interface ArticleDraftPayload {
   type: string;
   artist: string;
   thumbnailUrl: string;
+  youtubeVideoId: string;
   content: Record<string, unknown>;
 }
 
