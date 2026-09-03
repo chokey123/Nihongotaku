@@ -45,7 +45,10 @@ export function ArticleYouTubeReader({
   }
 
   return (
-    <div data-sticky-youtube-reader className="space-y-6">
+    <div
+      data-sticky-youtube-reader
+      className="space-y-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0"
+    >
       <section className="sticky top-2 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl">
         <div className="aspect-video">
           <iframe
@@ -64,19 +67,21 @@ export function ArticleYouTubeReader({
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-        <p>{labels.timestampHint}</p>
-        {activeTimestamp ? (
-          <span
-            aria-live="polite"
-            className="rounded-full bg-brand-soft px-3 py-1 font-semibold text-brand-strong"
-          >
-            {labels.nowPlaying} {activeTimestamp}
-          </span>
-        ) : null}
-      </div>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+          <p>{labels.timestampHint}</p>
+          {activeTimestamp ? (
+            <span
+              aria-live="polite"
+              className="rounded-full bg-brand-soft px-3 py-1 font-semibold text-brand-strong"
+            >
+              {labels.nowPlaying} {activeTimestamp}
+            </span>
+          ) : null}
+        </div>
 
-      <ReadonlyEditor content={content} onTimestampClick={seekTo} />
+        <ReadonlyEditor content={content} onTimestampClick={seekTo} />
+      </div>
     </div>
   )
 }
