@@ -47,9 +47,9 @@ export function ArticleYouTubeReader({
   return (
     <div
       data-sticky-youtube-reader
-      className="space-y-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0"
+      className="space-y-6 lg:grid lg:grid-cols-2 lg:items-center lg:gap-6 lg:space-y-0"
     >
-      <section className="sticky top-2 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl">
+      <section className="sticky top-2 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl lg:static">
         <div className="aspect-video">
           <iframe
             ref={(node) => {
