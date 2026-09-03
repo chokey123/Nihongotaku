@@ -47,10 +47,10 @@ export function ArticleYouTubeReader({
   return (
     <div
       data-sticky-youtube-reader
-      className="space-y-6 lg:grid lg:grid-cols-2 lg:items-center lg:gap-6 lg:space-y-0"
+      className="space-y-6 lg:grid lg:h-[calc(100dvh-1rem)] lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:space-y-0"
     >
-      <section className="sticky top-2 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl lg:static">
-        <div className="aspect-video">
+      <section className="sticky top-2 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl lg:static lg:flex lg:h-full lg:items-center">
+        <div className="aspect-video w-full">
           <iframe
             ref={(node) => {
               iframeRef.current = node
@@ -67,7 +67,7 @@ export function ArticleYouTubeReader({
         </div>
       </section>
 
-      <div className="space-y-6">
+      <div className="space-y-6 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:rounded-[28px] lg:border lg:border-border lg:bg-surface lg:p-6 lg:shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
           <p>{labels.timestampHint}</p>
           {activeTimestamp ? (
