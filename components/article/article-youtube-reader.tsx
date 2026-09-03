@@ -37,13 +37,12 @@ export function ArticleYouTubeReader({
       JSON.stringify({ event: "command", func: "playVideo", args: [] }),
       "https://www.youtube.com",
     );
-    iframeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     setActiveTimestamp(label);
   };
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[28px] border border-border bg-black shadow-lg">
+      <section className="sticky top-20 z-30 overflow-hidden rounded-[28px] border border-border bg-black shadow-xl sm:top-24">
         <div className="aspect-video">
           <iframe
             ref={(node) => {
